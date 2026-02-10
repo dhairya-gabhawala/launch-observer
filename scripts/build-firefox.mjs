@@ -1,8 +1,13 @@
 import { promises as fs } from 'fs';
 import path from 'path';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+
+const exec = promisify(execFile);
 
 const root = path.resolve(process.cwd());
 const distDir = path.join(root, 'dist', 'firefox');
+const zipPath = path.join(root, 'dist', 'firefox.zip');
 
 const copies = [
   'background',
@@ -29,4 +34,12 @@ for (const item of copies) {
   }
 }
 
-console.log('Firefox build ready in dist/firefox');
+await fs.rm(zipPath, { force: true });
+try {
+  await exec('zip', ['-r', zipPath, '.', '-x', '__MACOSX/*'], { cwd: distDir });
+  console.log('Firefox build ready in dist/firefox');
+  console.log('Firefox zip ready at dist/firefox.zip');
+} catch (error) {
+  console.log('Firefox build ready in dist/firefox');
+  console.log('Zip creation failed. Ensure the zip utility is installed.');
+}

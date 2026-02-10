@@ -30,6 +30,8 @@ Then load the generated build:
 
 If you plan to publish to AMO, set a permanent add-on ID in `manifest.firefox.json` under `browser_specific_settings.gecko.id`.
 
+For manual AMO upload, use the generated zip at `dist/firefox.zip` (manifest at zip root).
+
 ## Build CSS (Tailwind)
 ```
 npm install

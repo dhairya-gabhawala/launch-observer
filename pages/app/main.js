@@ -3,6 +3,7 @@ import { DEFAULT_ALLOWLIST, buildAllowlistFromServices, createAllowlistRow, dedu
 import { applySearch, selectRequest } from './requests.js';
 import { deleteSession, getSelectedSite, getSelectedTabId, openSessionDialog, renderSessions, selectSession, updateSessionSummary } from './sessions.js';
 import { setActiveTab, toggleSidebar, toast } from './ui.js';
+import { initTour } from './tour.js';
 
 function updateSettings(patch) {
   if (!state.settings) return;
@@ -197,6 +198,7 @@ if (elements.confirmOk) {
 if (elements.openHelp) {
   elements.openHelp.addEventListener('click', () => {
     elements.helpDialog?.showModal();
+    requestAnimationFrame(() => setHelpTab('overview'));
   });
 }
 
@@ -294,4 +296,29 @@ api.runtime.onMessage.addListener(message => {
   }
 });
 
+document.querySelectorAll('.help-tab').forEach(button => {
+  button.addEventListener('click', () => {
+    const tab = button.getAttribute('data-help-tab');
+    if (tab) setHelpTab(tab);
+  });
+});
+
 refreshState();
+initTour();
+
+function setHelpTab(tabId) {
+  document.querySelectorAll('.help-tab').forEach(button => {
+    const isActive = button.getAttribute('data-help-tab') === tabId;
+    button.classList.toggle('border-slate-900', isActive);
+    button.classList.toggle('text-slate-900', isActive);
+    button.classList.toggle('border-transparent', !isActive);
+    if (!isActive) {
+      button.classList.add('text-slate-500');
+    } else {
+      button.classList.remove('text-slate-500');
+    }
+  });
+  document.querySelectorAll('.help-panel').forEach(panel => {
+    panel.classList.toggle('hidden', panel.id !== tabId);
+  });
+}
