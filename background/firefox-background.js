@@ -1,12 +1,153 @@
-import {
-  parseQueryString,
-  parseRawBody,
-  getDomainFromUrl,
-  getPathFromUrl
-} from '../lib/parse.js';
-
 const api = globalThis.chrome || globalThis.browser;
 const action = api.action || api.browserAction;
+
+function safeDecode(value) {
+  if (value === undefined || value === null) return '';
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function decodePlus(value) {
+  if (value === undefined || value === null) return '';
+  return value.replace(/\+/g, ' ');
+}
+
+function parseKeyValuePairs(raw, plusAsSpace) {
+  if (!raw) return [];
+  return raw.split('&').filter(Boolean).map(pair => {
+    const idx = pair.indexOf('=');
+    const rawKey = idx === -1 ? pair : pair.slice(0, idx);
+    const rawValue = idx === -1 ? '' : pair.slice(idx + 1);
+    const keySource = plusAsSpace ? decodePlus(rawKey) : rawKey;
+    const valueSource = plusAsSpace ? decodePlus(rawValue) : rawValue;
+    return {
+      rawKey,
+      rawValue,
+      key: safeDecode(keySource),
+      value: safeDecode(valueSource)
+    };
+  });
+}
+
+function parseQueryString(url) {
+  try {
+    const parsed = new URL(url);
+    const rawQuery = parsed.search ? parsed.search.slice(1) : '';
+    return {
+      raw: rawQuery,
+      params: parseKeyValuePairs(rawQuery, true)
+    };
+  } catch {
+    return { raw: '', params: [] };
+  }
+}
+
+function parseFormData(formData) {
+  const params = [];
+  Object.keys(formData || {}).forEach(key => {
+    const values = Array.isArray(formData[key]) ? formData[key] : [formData[key]];
+    values.forEach(value => {
+      const rawValue = value || '';
+      params.push({
+        rawKey: key,
+        rawValue,
+        key,
+        value: safeDecode(rawValue)
+      });
+    });
+  });
+  return { raw: '', params };
+}
+
+function mergeRawBytes(rawEntries) {
+  const total = rawEntries.reduce((sum, entry) => sum + (entry.bytes ? entry.bytes.byteLength : 0), 0);
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  rawEntries.forEach(entry => {
+    if (!entry.bytes) return;
+    merged.set(new Uint8Array(entry.bytes), offset);
+    offset += entry.bytes.byteLength;
+  });
+  return merged;
+}
+
+function decodeBytes(bytes) {
+  if (!bytes || !bytes.length) return '';
+  try {
+    return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+  } catch {
+    return '';
+  }
+}
+
+function tryParseJson(text) {
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function parseRawBody(requestBody, contentType = '') {
+  if (requestBody.formData) {
+    return {
+      type: 'formData',
+      contentType,
+      parsed: parseFormData(requestBody.formData)
+    };
+  }
+
+  if (requestBody.raw && requestBody.raw.length) {
+    const bytes = mergeRawBytes(requestBody.raw);
+    const text = decodeBytes(bytes);
+    const lowerType = contentType.toLowerCase();
+
+    if (lowerType.includes('application/json')) {
+      const json = tryParseJson(text);
+      return {
+        type: 'json',
+        contentType,
+        raw: text,
+        parsed: json
+      };
+    }
+
+    if (lowerType.includes('application/x-www-form-urlencoded')) {
+      return {
+        type: 'form',
+        contentType,
+        raw: text,
+        parsed: {
+          raw: text,
+          params: parseKeyValuePairs(text, true)
+        }
+      };
+    }
+
+    const json = tryParseJson(text);
+    return {
+      type: json ? 'json' : 'text',
+      contentType,
+      raw: text,
+      parsed: json
+    };
+  }
+
+  return null;
+}
+
+function getDomainFromUrl(url) {
+  return new URL(url).hostname;
+}
+
+function getPathFromUrl(url) {
+  const parsed = new URL(url);
+  return parsed.pathname || '/';
+}
 
 const DEFAULT_ALLOWLIST = [
   'edge.adobedc.net'
@@ -31,8 +172,47 @@ let navState = new Map();
 let tabUrlCache = new Map();
 const payloadCacheByUrlTab = new Map();
 
+function storageGet(keys) {
+  return new Promise(resolve => {
+    try {
+      const result = api.storage.local.get(keys, data => resolve(data || {}));
+      if (result && typeof result.then === 'function') {
+        result.then(data => resolve(data || {})).catch(() => resolve({}));
+      }
+    } catch {
+      resolve({});
+    }
+  });
+}
+
+function storageSet(value) {
+  return new Promise(resolve => {
+    try {
+      const result = api.storage.local.set(value, () => resolve());
+      if (result && typeof result.then === 'function') {
+        result.then(() => resolve()).catch(() => resolve());
+      }
+    } catch {
+      resolve();
+    }
+  });
+}
+
+function tabsQuery(queryInfo) {
+  return new Promise(resolve => {
+    try {
+      const result = api.tabs.query(queryInfo, tabs => resolve(tabs || []));
+      if (result && typeof result.then === 'function') {
+        result.then(tabs => resolve(tabs || [])).catch(() => resolve([]));
+      }
+    } catch {
+      resolve([]);
+    }
+  });
+}
+
 async function loadState() {
-  const stored = await api.storage.local.get(['settings', 'requests', 'sessions', 'sites', 'currentSessionId']);
+  const stored = await storageGet(['settings', 'requests', 'sessions', 'sites', 'currentSessionId']);
   if (stored.settings) settings = { ...DEFAULT_SETTINGS, ...stored.settings };
   if (Array.isArray(stored.requests)) {
     requests = stored.requests;
@@ -46,7 +226,7 @@ async function loadState() {
 }
 
 function saveState() {
-  return api.storage.local.set({ settings, requests, sessions, sites, currentSessionId });
+  return storageSet({ settings, requests, sessions, sites, currentSessionId });
 }
 
 function isAllowed(url) {
@@ -123,7 +303,7 @@ api.runtime.onStartup?.addListener(() => {
 
 action?.onClicked.addListener(async () => {
   const url = api.runtime.getURL('pages/app.html');
-  const tabs = await api.tabs.query({ url });
+  const tabs = await tabsQuery({ url });
   if (tabs.length) {
     await api.tabs.update(tabs[0].id, { active: true });
     return;
@@ -133,7 +313,7 @@ action?.onClicked.addListener(async () => {
 
 async function endActiveSessionIfClosed() {
   const url = api.runtime.getURL('pages/app.html');
-  const tabs = await api.tabs.query({ url });
+  const tabs = await tabsQuery({ url });
   if (tabs.length) return;
   const session = sessions.find(s => s.id === settings.selectedSessionId);
   if (session) session.paused = true;
@@ -148,7 +328,7 @@ api.tabs.onRemoved.addListener(() => {
   endActiveSessionIfClosed();
 });
 
-api.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+api.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (changeInfo.status === 'complete') {
     endActiveSessionIfClosed();
   }

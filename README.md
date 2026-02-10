@@ -16,10 +16,19 @@ Browser extension for observing analytics network calls with fully decoded paylo
 2. Enable **Developer mode**.
 3. Click **Load unpacked** and select `launch-observer`.
 
-## Load in Firefox (Temporary)
+## Load in Firefox (Stable)
+Firefox Stable requires a Manifest V2 build.
+
+```
+npm run build:firefox
+```
+
+Then load the generated build:
 1. Open `about:debugging#/runtime/this-firefox`.
 2. Click **Load Temporary Add-on**.
-3. Select `manifest.json` from `launch-observer`.
+3. Select `dist/firefox/manifest.json`.
+
+If you plan to publish to AMO, set a permanent add-on ID in `manifest.firefox.json` under `browser_specific_settings.gecko.id`.
 
 ## Build CSS (Tailwind)
 ```

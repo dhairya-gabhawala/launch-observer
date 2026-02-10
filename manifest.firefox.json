@@ -1,0 +1,39 @@
+{
+  "manifest_version": 2,
+  "name": "Launch Observer",
+  "version": "0.1.0",
+  "description": "Observe and inspect analytics network calls with decoded payloads.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "launch-observer@example.com",
+      "strict_min_version": "102.0"
+    }
+  },
+  "browser_action": {
+    "default_title": "Launch Observer"
+  },
+  "background": {
+    "scripts": ["background/firefox-background.js"]
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content/content.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": ["content/inject.js"],
+  "permissions": [
+    "storage",
+    "tabs",
+    "webRequest",
+    "webNavigation",
+    "<all_urls>"
+  ],
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  }
+}

@@ -15,6 +15,7 @@ pnpm-debug.log*
 # Extension bundles
 *.zip
 artifacts/
+dist/
 
 # OS / temp
 Thumbs.db

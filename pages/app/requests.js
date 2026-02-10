@@ -117,6 +117,7 @@ export function selectRequest(id) {
     elements.detailQuery.innerHTML = renderKeyValueTable(queryParams, state.querySearch);
     if (elements.queryTools) elements.queryTools.classList.remove('hidden');
     if (elements.querySearch) elements.querySearch.value = state.querySearch;
+    scrollFirstMatch(elements.detailQuery);
   } else {
     elements.detailQuery.innerHTML = '<div class="text-slate-500 text-sm">None</div>';
     if (elements.queryTools) elements.queryTools.classList.add('hidden');
@@ -130,22 +131,26 @@ export function selectRequest(id) {
     elements.detailPayload.innerHTML = renderJson(req.body.parsed, state.payloadSearch);
     if (elements.payloadTools) elements.payloadTools.classList.remove('hidden');
     if (elements.payloadExpandTools) elements.payloadExpandTools.classList.remove('hidden');
+    scrollFirstMatch(elements.detailPayload);
   } else if ((req.body.type === 'form' || req.body.type === 'formData') && req.body.parsed) {
     elements.detailPayload.innerHTML = renderKeyValueTable(req.body.parsed.params || [], state.payloadSearch);
     if (elements.payloadTools) elements.payloadTools.classList.remove('hidden');
     if (elements.payloadExpandTools) elements.payloadExpandTools.classList.add('hidden');
+    scrollFirstMatch(elements.detailPayload);
   } else if (req.body.type === 'text' && req.body.raw) {
     const parsed = tryParseJsonString(req.body.raw);
     if (parsed) {
       elements.detailPayload.innerHTML = renderJson(parsed, state.payloadSearch);
       if (elements.payloadTools) elements.payloadTools.classList.remove('hidden');
       if (elements.payloadExpandTools) elements.payloadExpandTools.classList.remove('hidden');
+      scrollFirstMatch(elements.detailPayload);
     } else {
       const formParsed = tryParseFormEncoded(req.body.raw);
       if (formParsed) {
         elements.detailPayload.innerHTML = renderKeyValueTable(formParsed.params || [], state.payloadSearch);
         if (elements.payloadTools) elements.payloadTools.classList.remove('hidden');
         if (elements.payloadExpandTools) elements.payloadExpandTools.classList.add('hidden');
+        scrollFirstMatch(elements.detailPayload);
       } else {
         elements.detailPayload.innerHTML = `<pre class="text-xs whitespace-pre-wrap rounded border bg-slate-50 p-3">${escapeHtml(req.body.raw || '')}</pre>`;
         if (elements.payloadTools) elements.payloadTools.classList.add('hidden');
@@ -180,6 +185,15 @@ export function selectRequest(id) {
     setActiveTab(state.activeTab);
   }
   renderList();
+}
+
+function scrollFirstMatch(container) {
+  if (!container) return;
+  const mark = container.querySelector('mark');
+  if (!mark) return;
+  requestAnimationFrame(() => {
+    mark.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  });
 }
 
 export function extractPayloadJson(req) {

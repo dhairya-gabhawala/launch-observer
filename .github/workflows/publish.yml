@@ -22,6 +22,7 @@ jobs:
             -x "node_modules/*" \
             -x ".git/*" \
             -x ".github/*" \
+            -x "dist/*" \
             -x "README.md" \
             -x "package.json" \
             -x "package-lock.json" \
@@ -66,10 +67,13 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: launch-observer
+      - uses: actions/checkout@v4
       - name: Upload and Publish to Firefox AMO
         run: |
+          npm ci
+          npm run build:firefox
           npx web-ext@7.11.0 sign \
-            --source-dir . \
+            --source-dir ./dist/firefox \
             --artifacts-dir ./artifacts \
             --api-key "${FIREFOX_API_KEY}" \
             --api-secret "${FIREFOX_API_SECRET}"
