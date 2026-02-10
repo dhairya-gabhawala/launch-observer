@@ -5,7 +5,8 @@
   "description": "Browser extension to observe and inspect analytics network calls.",
   "scripts": {
     "build:css": "tailwindcss -i styles/tailwind.css -o styles/app.css --minify",
-    "build:firefox": "node scripts/build-firefox.mjs"
+    "build:firefox": "node scripts/build-firefox.mjs",
+    "build:chrome": "node scripts/build-chrome.mjs"
   },
   "devDependencies": {
     "tailwindcss": "^3.4.13"
