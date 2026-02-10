@@ -1,5 +1,5 @@
 import { elements, state } from './state.js';
-import { escapeHtml } from './utils.js';
+import { escapeHtml, setHTML } from './utils.js';
 
 export function toggleSidebar(open) {
   if (!elements.sidebar) return;
@@ -42,7 +42,7 @@ export function toast(message, detail = '') {
   if (!stack) return;
   const toast = document.createElement('div');
   toast.className = 'pointer-events-auto w-full max-w-sm translate-y-0 transform rounded-lg bg-white opacity-100 shadow-lg outline-1 outline-black/5 transition duration-300 ease-out';
-  toast.innerHTML = `
+  setHTML(toast, `
     <div class="p-4">
       <div class="flex items-start">
         <div class="shrink-0">
@@ -64,7 +64,7 @@ export function toast(message, detail = '') {
         </div>
       </div>
     </div>
-  `;
+  `);
   const closeBtn = toast.querySelector('button');
   if (closeBtn) closeBtn.addEventListener('click', () => toast.remove());
   stack.appendChild(toast);

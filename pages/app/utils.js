@@ -55,3 +55,10 @@ export function toTitleCase(value) {
   const spaced = value.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ');
   return spaced.replace(/\b\w/g, c => c.toUpperCase());
 }
+
+export function setHTML(target, html) {
+  if (!target) return;
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  target.replaceChildren(...doc.body.childNodes);
+}

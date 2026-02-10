@@ -1,5 +1,5 @@
 import { api, elements, state } from './state.js';
-import { escapeHtml, formatTime } from './utils.js';
+import { escapeHtml, formatTime, setHTML } from './utils.js';
 import { applySearch } from './requests.js';
 import { toast } from './ui.js';
 
@@ -7,7 +7,7 @@ export function renderSessions() {
   const list = elements.sessionList;
   if (!list) return;
   if (!state.sessions.length) {
-    list.innerHTML = '<div class="p-4 text-sm text-slate-500">No sessions yet.</div>';
+    setHTML(list, '<div class="p-4 text-sm text-slate-500">No sessions yet.</div>');
     return;
   }
   const selectedId = state.settings?.selectedSessionId;
@@ -18,7 +18,7 @@ export function renderSessions() {
     return acc;
   }, {});
 
-  list.innerHTML = Object.entries(grouped).map(([site, siteSessions]) => {
+  setHTML(list, Object.entries(grouped).map(([site, siteSessions]) => {
     const sessionRows = siteSessions.map(session => {
       const count = state.requests.filter(r => r.sessionId === session.id).length;
       const active = session.id === selectedId ? 'bg-slate-50' : 'bg-white';
@@ -60,7 +60,7 @@ export function renderSessions() {
         ${sessionRows}
       </div>
     `;
-  }).join('');
+  }).join(''));
 
   list.querySelectorAll('button[data-session-id]').forEach(button => {
     button.addEventListener('click', () => {
@@ -142,7 +142,7 @@ export function buildSiteOptions() {
   if (!select) return;
   const sites = Array.from(new Set(state.sites.filter(Boolean))).sort();
   const options = sites.map(site => `<option value="${escapeHtml(site)}">${escapeHtml(site)}</option>`).join('');
-  select.innerHTML = options || '<option value="">Select a site</option>';
+  setHTML(select, options || '<option value="">Select a site</option>');
 }
 
 export function populateTabOptions() {
@@ -157,9 +157,9 @@ export function populateTabOptions() {
         label: `${tab.title || tab.url || 'Untitled'}`
       }))
     ];
-    elements.sessionLockTab.innerHTML = options.map(opt => {
+    setHTML(elements.sessionLockTab, options.map(opt => {
       return `<option value="${opt.id}">${escapeHtml(opt.label)}</option>`;
-    }).join('');
+    }).join(''));
   });
 }
 

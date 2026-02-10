@@ -1,5 +1,5 @@
 import { elements, state } from './state.js';
-import { escapeHtml, formatDuration, formatTime, hashString, toTitleCase, highlightText } from './utils.js';
+import { escapeHtml, formatDuration, formatTime, hashString, toTitleCase, highlightText, setHTML } from './utils.js';
 import { renderServiceIcon } from './allowlist.js';
 import { bindPayloadActions, highlightJson, renderJson, tryParseFormEncoded, tryParseJsonString } from './payload.js';
 import { setActiveTab, toggleSidebar } from './ui.js';
@@ -25,11 +25,11 @@ export function renderList() {
   if (!list) return;
 
   if (!state.filtered.length) {
-    list.innerHTML = '<div class="p-4 text-sm text-slate-500">No matching requests yet.</div>';
+    setHTML(list, '<div class="p-4 text-sm text-slate-500">No matching requests yet.</div>');
   } else {
     const groups = groupRequestsByPageSessions(state.filtered)
       .sort((a, b) => (b.items[0]?.timeStamp || 0) - (a.items[0]?.timeStamp || 0));
-    list.innerHTML = groups.map(group => {
+    setHTML(list, groups.map(group => {
       const count = group.items.length;
       const groupId = `group-${hashString(group.key)}`;
       const rows = [...group.items].sort((a, b) => (b.timeStamp || 0) - (a.timeStamp || 0)).map(req => {
@@ -66,7 +66,7 @@ export function renderList() {
           </div>
         </details>
       `;
-    }).join('');
+    }).join(''));
   }
 
   elements.requestCount.textContent = `${state.filtered.length} request${state.filtered.length === 1 ? '' : 's'}`;
@@ -106,66 +106,66 @@ export function selectRequest(id) {
   elements.detailDomain.textContent = req.domain || '';
   elements.detailUrl.textContent = req.url || '';
 
-  elements.detailMeta.innerHTML = [
+  setHTML(elements.detailMeta, [
     `Method: ${req.method || ''}`,
     `Status: ${req.statusCode || 'pending'}`,
     `Duration: ${formatDuration(req.duration)}`
-  ].map(item => `<span>${escapeHtml(item)}</span>`).join('');
+  ].map(item => `<span>${escapeHtml(item)}</span>`).join(''));
 
   const queryParams = req.query?.params || [];
   if (queryParams.length) {
-    elements.detailQuery.innerHTML = renderKeyValueTable(queryParams, state.querySearch);
+    setHTML(elements.detailQuery, renderKeyValueTable(queryParams, state.querySearch));
     if (elements.queryTools) elements.queryTools.classList.remove('hidden');
     if (elements.querySearch) elements.querySearch.value = state.querySearch;
     scrollFirstMatch(elements.detailQuery);
   } else {
-    elements.detailQuery.innerHTML = '<div class="text-slate-500 text-sm">None</div>';
+    setHTML(elements.detailQuery, '<div class="text-slate-500 text-sm">None</div>');
     if (elements.queryTools) elements.queryTools.classList.add('hidden');
   }
   if (elements.payloadSearch) elements.payloadSearch.value = state.payloadSearch;
 
   if (!req.body) {
-    elements.detailPayload.innerHTML = '<div class="text-slate-500 text-sm">No payload</div>';
+    setHTML(elements.detailPayload, '<div class="text-slate-500 text-sm">No payload</div>');
     if (elements.payloadTools) elements.payloadTools.classList.add('hidden');
   } else if (req.body.type === 'json' && req.body.parsed) {
-    elements.detailPayload.innerHTML = renderJson(req.body.parsed, state.payloadSearch);
+    setHTML(elements.detailPayload, renderJson(req.body.parsed, state.payloadSearch));
     if (elements.payloadTools) elements.payloadTools.classList.remove('hidden');
     if (elements.payloadExpandTools) elements.payloadExpandTools.classList.remove('hidden');
     scrollFirstMatch(elements.detailPayload);
   } else if ((req.body.type === 'form' || req.body.type === 'formData') && req.body.parsed) {
-    elements.detailPayload.innerHTML = renderKeyValueTable(req.body.parsed.params || [], state.payloadSearch);
+    setHTML(elements.detailPayload, renderKeyValueTable(req.body.parsed.params || [], state.payloadSearch));
     if (elements.payloadTools) elements.payloadTools.classList.remove('hidden');
     if (elements.payloadExpandTools) elements.payloadExpandTools.classList.add('hidden');
     scrollFirstMatch(elements.detailPayload);
   } else if (req.body.type === 'text' && req.body.raw) {
     const parsed = tryParseJsonString(req.body.raw);
     if (parsed) {
-      elements.detailPayload.innerHTML = renderJson(parsed, state.payloadSearch);
+      setHTML(elements.detailPayload, renderJson(parsed, state.payloadSearch));
       if (elements.payloadTools) elements.payloadTools.classList.remove('hidden');
       if (elements.payloadExpandTools) elements.payloadExpandTools.classList.remove('hidden');
       scrollFirstMatch(elements.detailPayload);
     } else {
       const formParsed = tryParseFormEncoded(req.body.raw);
       if (formParsed) {
-        elements.detailPayload.innerHTML = renderKeyValueTable(formParsed.params || [], state.payloadSearch);
+        setHTML(elements.detailPayload, renderKeyValueTable(formParsed.params || [], state.payloadSearch));
         if (elements.payloadTools) elements.payloadTools.classList.remove('hidden');
         if (elements.payloadExpandTools) elements.payloadExpandTools.classList.add('hidden');
         scrollFirstMatch(elements.detailPayload);
       } else {
-        elements.detailPayload.innerHTML = `<pre class="text-xs whitespace-pre-wrap rounded border bg-slate-50 p-3">${escapeHtml(req.body.raw || '')}</pre>`;
+        setHTML(elements.detailPayload, `<pre class="text-xs whitespace-pre-wrap rounded border bg-slate-50 p-3">${escapeHtml(req.body.raw || '')}</pre>`);
         if (elements.payloadTools) elements.payloadTools.classList.add('hidden');
       }
     }
   } else {
-    elements.detailPayload.innerHTML = `<pre class="text-xs whitespace-pre-wrap rounded border bg-slate-50 p-3">${escapeHtml(req.body.raw || '')}</pre>`;
+    setHTML(elements.detailPayload, `<pre class="text-xs whitespace-pre-wrap rounded border bg-slate-50 p-3">${escapeHtml(req.body.raw || '')}</pre>`);
     if (elements.payloadTools) elements.payloadTools.classList.add('hidden');
   }
 
   if (req.requestHeaders && req.requestHeaders.length) {
     const headerRows = req.requestHeaders.map(h => ({ key: h.name, value: h.value || '' }));
-    elements.detailHeaders.innerHTML = renderKeyValueTable(headerRows);
+    setHTML(elements.detailHeaders, renderKeyValueTable(headerRows));
   } else {
-    elements.detailHeaders.innerHTML = '<div class="text-slate-500 text-sm">No headers captured</div>';
+    setHTML(elements.detailHeaders, '<div class="text-slate-500 text-sm">No headers captured</div>');
   }
 
   const rawParts = [
@@ -176,7 +176,7 @@ export function selectRequest(id) {
 
   elements.detailRaw.textContent = rawParts;
   if (req.body?.type === 'json' && req.body?.raw) {
-    elements.detailRaw.innerHTML = highlightJson(req.body.raw);
+    setHTML(elements.detailRaw, highlightJson(req.body.raw));
   } else {
     elements.detailRaw.textContent = rawParts;
   }

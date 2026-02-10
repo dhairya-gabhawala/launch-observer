@@ -1,5 +1,5 @@
 import { elements, state } from './state.js';
-import { escapeHtml, hashString } from './utils.js';
+import { escapeHtml, hashString, setHTML } from './utils.js';
 
 export const SERVICE_CATALOG = [
   {
@@ -155,10 +155,10 @@ export function renderAllowlistServices(allowlist) {
     : SERVICE_CATALOG;
   const grouped = groupServicesByInitial(filtered);
   if (!Object.keys(grouped).length) {
-    elements.allowlistServices.innerHTML = '<div class="rounded border p-3 text-sm text-slate-500">No services found.</div>';
+    setHTML(elements.allowlistServices, '<div class="rounded border p-3 text-sm text-slate-500">No services found.</div>');
     return;
   }
-  elements.allowlistServices.innerHTML = `
+  setHTML(elements.allowlistServices, `
     <nav aria-label="Service directory" class="h-full max-h-[360px] overflow-y-auto rounded border bg-white">
       <div class="sticky top-0 z-30 border-b bg-white px-3 py-2 shadow-sm">
         <input id="allowlist-services-search-inner" class="w-full border rounded bg-white px-3 py-2 text-sm" placeholder="Search services…" value="${escapeHtml(state.allowlistServiceSearch || '')}" />
@@ -215,12 +215,12 @@ export function renderAllowlistServices(allowlist) {
         </div>
       `).join('')}
     </nav>
-  `;
+  `);
 }
 
 export function renderAllowlistFields(entries, mappings) {
   const list = elements.allowlistFields;
-  list.innerHTML = '';
+  list.replaceChildren();
   if (!entries.length) {
     list.appendChild(createAllowlistRow('', null));
     return;
@@ -241,7 +241,7 @@ export function createAllowlistRow(value = '', mapping = null) {
     { value: 'custom', label: 'Custom service…' }
   ];
   const currentServiceId = mapping?.serviceId || (mapping?.customName ? 'custom' : 'none');
-  row.innerHTML = `
+  setHTML(row, `
     <div class="flex flex-wrap items-center gap-2">
       <input data-domain class="flex-1 min-w-[220px] border rounded px-3 py-2 text-sm" value="${escapeHtml(value)}" placeholder="edge.adobedc.net" />
       <select data-service class="min-w-[180px] border rounded px-2 py-2 text-sm">
@@ -250,7 +250,7 @@ export function createAllowlistRow(value = '', mapping = null) {
       <button type="button" class="text-xs underline text-rose-700">Remove</button>
     </div>
     <input data-custom-name class="border rounded px-2 py-2 text-sm hidden" placeholder="Custom service name" value="${escapeHtml(mapping?.customName || '')}" />
-  `;
+  `);
   const removeButton = row.querySelector('button');
   const serviceSelect = row.querySelector('select[data-service]');
   const customInput = row.querySelector('input[data-custom-name]');
