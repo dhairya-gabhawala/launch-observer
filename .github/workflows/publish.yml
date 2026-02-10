@@ -1,0 +1,96 @@
+name: Build and Publish Extension
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - run: npm run build:css
+      - name: Create zip
+        run: |
+          zip -r launch-observer.zip . \
+            -x "node_modules/*" \
+            -x ".git/*" \
+            -x ".github/*" \
+            -x "README.md" \
+            -x "package.json" \
+            -x "package-lock.json" \
+            -x "tailwind.config.js"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: launch-observer
+          path: launch-observer.zip
+
+  publish-chrome:
+    needs: build
+    runs-on: ubuntu-latest
+    if: ${{ secrets.CHROME_EXTENSION_ID != '' && secrets.CHROME_CLIENT_ID != '' && secrets.CHROME_CLIENT_SECRET != '' && secrets.CHROME_REFRESH_TOKEN != '' }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: launch-observer
+      - name: Upload and Publish to Chrome Web Store
+        run: |
+          npx chrome-webstore-upload-cli@2 upload \
+            --source launch-observer.zip \
+            --extension-id "${CHROME_EXTENSION_ID}" \
+            --client-id "${CHROME_CLIENT_ID}" \
+            --client-secret "${CHROME_CLIENT_SECRET}" \
+            --refresh-token "${CHROME_REFRESH_TOKEN}"
+          npx chrome-webstore-upload-cli@2 publish \
+            --extension-id "${CHROME_EXTENSION_ID}" \
+            --client-id "${CHROME_CLIENT_ID}" \
+            --client-secret "${CHROME_CLIENT_SECRET}" \
+            --refresh-token "${CHROME_REFRESH_TOKEN}"
+        env:
+          CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
+          CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
+          CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
+          CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
+
+  publish-firefox:
+    needs: build
+    runs-on: ubuntu-latest
+    if: ${{ secrets.FIREFOX_API_KEY != '' && secrets.FIREFOX_API_SECRET != '' }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: launch-observer
+      - name: Upload and Publish to Firefox AMO
+        run: |
+          npx web-ext@7.11.0 sign \
+            --source-dir . \
+            --artifacts-dir ./artifacts \
+            --api-key "${FIREFOX_API_KEY}" \
+            --api-secret "${FIREFOX_API_SECRET}"
+        env:
+          FIREFOX_API_KEY: ${{ secrets.FIREFOX_API_KEY }}
+          FIREFOX_API_SECRET: ${{ secrets.FIREFOX_API_SECRET }}
+
+  publish-edge:
+    needs: build
+    runs-on: ubuntu-latest
+    if: ${{ secrets.EDGE_PRODUCT_ID != '' && secrets.EDGE_CLIENT_ID != '' && secrets.EDGE_CLIENT_SECRET != '' && secrets.EDGE_TENANT_ID != '' }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: launch-observer
+      - name: Publish to Microsoft Edge Add-ons
+        run: |
+          echo "Configure Edge Add-ons publish API credentials and command."
+          echo "See README for required secrets and instructions."
+        env:
+          EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID }}
+          EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
+          EDGE_CLIENT_SECRET: ${{ secrets.EDGE_CLIENT_SECRET }}
+          EDGE_TENANT_ID: ${{ secrets.EDGE_TENANT_ID }}

@@ -1,0 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .token.key { color: #0f172a; font-weight: 600; }
+  .token.string { color: #0ea5e9; }
+  .token.number { color: #a855f7; }
+  .token.boolean { color: #16a34a; }
+  .token.null { color: #94a3b8; }
+}
