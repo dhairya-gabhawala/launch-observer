@@ -285,6 +285,12 @@
       gap: 18px;
     }
 
+    @media (min-width: 1024px) {
+      .feature-grid--three {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+
     .feature-card {
       background: white;
       border-radius: 20px;
@@ -514,6 +520,7 @@
         <a href="#features">Features</a>
         <a href="#workflow">How it works</a>
         <a href="#screens">Screens</a>
+        <a href="uat.html">UAT Docs</a>
       </div>
     </nav>
 
@@ -529,7 +536,7 @@
         <div class="hero-meta">
           <div class="meta-pill">Session-based tracking</div>
           <div class="meta-pill">Decoded payloads</div>
-          <div class="meta-pill">Search + filters</div>
+          <div class="meta-pill">UAT validations</div>
         </div>
       </div>
       <div class="hero-card">
@@ -541,7 +548,8 @@
             <button class="carousel-dot active" data-index="0" aria-label="Show overview"></button>
             <button class="carousel-dot" data-index="1" aria-label="Show getting started"></button>
             <button class="carousel-dot" data-index="2" aria-label="Show common tasks"></button>
-            <button class="carousel-dot" data-index="3" aria-label="Show troubleshooting"></button>
+            <button class="carousel-dot" data-index="3" aria-label="Show UAT assertions"></button>
+            <button class="carousel-dot" data-index="4" aria-label="Show troubleshooting"></button>
           </div>
         </div>
       </div>
@@ -550,7 +558,7 @@
     <section id="features" class="section">
       <h2 class="section-title">Purpose-built for signal quality</h2>
       <p class="section-sub">Launch Observer keeps the focus on analytics and marketing signals. Group requests by page activity, inspect payload trees, and track everything you care about without noise.</p>
-      <div class="feature-grid">
+      <div class="feature-grid feature-grid--three">
         <div class="feature-card">
           <h3>Domain allowlist</h3>
           <p>Track only the domains that matter. Map custom domains to popular services and keep your signals clean.</p>
@@ -562,6 +570,14 @@
         <div class="feature-card">
           <h3>Session history</h3>
           <p>Create named sessions, organize by site, and return to any capture later without losing context.</p>
+        </div>
+        <div class="feature-card">
+          <h3>UAT assertions</h3>
+          <p>Import per-site validation rules, see pass/fail badges on requests, and export a shareable UAT report.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Assertions viewer</h3>
+          <p>Inspect the live assertion configuration for any site and download the JSON for review or reuse.</p>
         </div>
         <div class="feature-card">
           <h3>Guided tour</h3>
@@ -586,8 +602,36 @@
         </div>
         <div class="workflow-step">
           <span>Step 3</span>
+          <h3>Validate with UAT</h3>
+          <p>Import your UAT assertion JSON for the site and enable validations when starting a session.</p>
+        </div>
+        <div class="workflow-step">
+          <span>Step 4</span>
           <h3>Inspect the report</h3>
           <p>Browse requests, open details, and decode payloads with context markers for event types.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="uat" class="section">
+      <h2 class="section-title">UAT assertions, explained</h2>
+      <p class="section-sub">UAT assertions are JSON rules that verify your analytics data. Each assertion includes one or more conditions and optional page-level count checks.</p>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <h3>Per-site configs</h3>
+          <p>Upload one JSON file per site. Assertions only apply to sessions created for that site.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Request + page scope</h3>
+          <p>Validate a single request or enforce page-level rules like “pageview fires exactly once.”</p>
+        </div>
+        <div class="feature-card">
+          <h3>Shareable reports</h3>
+          <p>Export a PDF of pass/fail results for teams and stakeholders.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Schema notes</h3>
+          <p>The in-app Help panel documents required vs optional fields, operator types, and examples.</p>
         </div>
       </div>
     </section>
@@ -603,6 +647,10 @@
         <figure>
           <img src="assets/help/common-tasks.png" alt="Request inspection" data-zoomable />
           <figcaption>Request inspection and payload search</figcaption>
+        </figure>
+        <figure>
+          <img src="assets/help/uat-assertions.png" alt="UAT assertions" data-zoomable />
+          <figcaption>UAT assertions and validation workflow</figcaption>
         </figure>
         <figure>
           <img src="assets/help/troubleshooting.png" alt="Troubleshooting" data-zoomable />
@@ -643,6 +691,8 @@
         ·
         <a href="#workflow">How it works</a>
         ·
+        <a href="uat.html">UAT Docs</a>
+        ·
         <a href="privacy.html">Privacy</a>
       </div>
     </footer>
@@ -661,6 +711,7 @@
         { src: "assets/help/overview.png", alt: "Launch Observer overview" },
         { src: "assets/help/getting-started.png", alt: "Session setup" },
         { src: "assets/help/common-tasks.png", alt: "Request inspection" },
+        { src: "assets/help/uat-assertions.png", alt: "UAT assertions" },
         { src: "assets/help/troubleshooting.png", alt: "Troubleshooting" },
       ];
 

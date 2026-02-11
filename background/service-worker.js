@@ -4,6 +4,7 @@ import {
   getDomainFromUrl,
   getPathFromUrl
 } from '../lib/parse.js';
+import { normalizeUatConfig, evaluateAssertionsForRequest } from '../lib/uat.js';
 
 const api = globalThis.chrome || globalThis.browser;
 const action = api.action || api.browserAction;
@@ -30,9 +31,10 @@ let currentSessionId = null;
 let navState = new Map();
 let tabUrlCache = new Map();
 const payloadCacheByUrlTab = new Map();
+let uatConfigs = {};
 
 async function loadState() {
-  const stored = await api.storage.local.get(['settings', 'requests', 'sessions', 'sites', 'currentSessionId']);
+  const stored = await api.storage.local.get(['settings', 'requests', 'sessions', 'sites', 'currentSessionId', 'uatConfigs']);
   if (stored.settings) settings = { ...DEFAULT_SETTINGS, ...stored.settings };
   if (Array.isArray(stored.requests)) {
     requests = stored.requests;
@@ -41,12 +43,15 @@ async function loadState() {
   if (Array.isArray(stored.sessions)) sessions = stored.sessions;
   if (Array.isArray(stored.sites)) sites = stored.sites;
   if (stored.currentSessionId) currentSessionId = stored.currentSessionId;
+  if (stored.uatConfigs && typeof stored.uatConfigs === 'object') {
+    uatConfigs = Object.fromEntries(Object.entries(stored.uatConfigs).map(([key, value]) => [key, normalizeUatConfig(value)]));
+  }
   if (!currentSessionId) currentSessionId = sessions[0]?.id || null;
   if (!settings.selectedSessionId) settings.selectedSessionId = currentSessionId;
 }
 
 function saveState() {
-  return api.storage.local.set({ settings, requests, sessions, sites, currentSessionId });
+  return api.storage.local.set({ settings, requests, sessions, sites, currentSessionId, uatConfigs });
 }
 
 function isAllowed(url) {
@@ -76,6 +81,8 @@ function addRequest(details) {
   const requestId = getRequestIdFromUrl(details.url);
   const cachedPayload = requestId ? pullCachedPayload(requestId) : pullCachedPayloadByUrl(details.tabId, details.url, details.timeStamp);
   const pageUrl = nav.pageUrl || nav.pendingUrl || cachedUrl || extractPageUrlFromRequest(details.url) || null;
+  const session = sessions.find(s => s.id === sessionId);
+  const uatConfig = session?.site ? uatConfigs[session.site] : null;
   const entry = {
     id: `${details.requestId}:${details.timeStamp}`,
     requestId: details.requestId,
@@ -95,7 +102,8 @@ function addRequest(details) {
     query: parseQueryString(details.url),
     body: cachedPayload || null,
     pageUrl,
-    navId: nav.navId || null
+    navId: nav.navId || null,
+    uat: session?.uatEnabled && uatConfig ? { status: 'pending', results: [] } : null
   };
 
   requests.push(entry);
@@ -109,8 +117,33 @@ function updateRequest(requestId, patch) {
   const entry = requestIndex.get(requestId);
   if (!entry) return;
   Object.assign(entry, patch);
+  evaluateUatForRequest(entry);
   saveState();
   api.runtime.sendMessage({ type: 'requestUpdated', request: entry });
+}
+
+function evaluateUatForRequest(entry) {
+  if (!entry) return;
+  const session = sessions.find(s => s.id === entry.sessionId);
+  if (!session || !session.uatEnabled) {
+    entry.uat = null;
+    return;
+  }
+  const config = session.site ? uatConfigs[session.site] : null;
+  if (!config || !Array.isArray(config.assertions)) {
+    entry.uat = { status: 'not-applicable', results: [] };
+    return;
+  }
+  const sessionRequests = requests.filter(r => r.sessionId === entry.sessionId);
+  const results = evaluateAssertionsForRequest(entry, config.assertions, sessionRequests);
+  if (!results.length) {
+    entry.uat = { status: 'not-applicable', results: [] };
+    return;
+  }
+  entry.uat = {
+    status: 'done',
+    results
+  };
 }
 
 api.runtime.onInstalled?.addListener(() => {
@@ -161,7 +194,7 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   if (message.type === 'getState') {
-    sendResponse({ settings, requests, sessions, sites, currentSessionId });
+    sendResponse({ settings, requests, sessions, sites, currentSessionId, uatConfigs });
     return true;
   }
   if (message.type === 'setSettings') {
@@ -169,6 +202,27 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     saveState();
     api.runtime.sendMessage({ type: 'settingsUpdated', settings });
     sendResponse({ ok: true, settings });
+    return true;
+  }
+  if (message.type === 'setUatConfig') {
+    const site = (message.site || '').trim();
+    if (!site || !message.config) {
+      sendResponse({ ok: false });
+      return true;
+    }
+    if (!sites.includes(site)) sites.unshift(site);
+    uatConfigs = { ...uatConfigs, [site]: normalizeUatConfig(message.config) };
+    requests.forEach(entry => {
+      const session = sessions.find(s => s.id === entry.sessionId);
+      if (!session || !session.uatEnabled) return;
+      if (session.site !== site) return;
+      evaluateUatForRequest(entry);
+      api.runtime.sendMessage({ type: 'requestUpdated', request: entry });
+    });
+    saveState();
+    api.runtime.sendMessage({ type: 'sitesUpdated', sites });
+    api.runtime.sendMessage({ type: 'uatConfigsUpdated', uatConfigs });
+    sendResponse({ ok: true, uatConfigs });
     return true;
   }
   if (message.type === 'clearRequests') {
@@ -192,7 +246,7 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
     }
     const name = (message.name || '').trim() || `Session ${sessions.length + 1}`;
-    const session = createSession(name, site, message.lockTabId || null);
+    const session = createSession(name, site, message.lockTabId || null, !!message.uatEnabled);
     sessions.unshift(session);
     if (!sites.includes(site)) sites.unshift(site);
     currentSessionId = session.id;
@@ -211,6 +265,21 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     saveState();
     api.runtime.sendMessage({ type: 'sessionsUpdated', sessions, currentSessionId });
     sendResponse({ ok: true });
+    return true;
+  }
+  if (message.type === 'updateSession') {
+    const session = sessions.find(s => s.id === message.id);
+    if (!session) {
+      sendResponse({ ok: false });
+      return true;
+    }
+    if (message.name !== undefined) session.name = message.name || session.name;
+    if (message.site) session.site = message.site;
+    if (message.lockTabId !== undefined) session.lockTabId = message.lockTabId;
+    if (message.uatEnabled !== undefined) session.uatEnabled = !!message.uatEnabled;
+    saveState();
+    api.runtime.sendMessage({ type: 'sessionsUpdated', sessions, currentSessionId });
+    sendResponse({ ok: true, session });
     return true;
   }
   if (message.type === 'selectSession') {
@@ -270,6 +339,22 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ ok: true });
     return true;
   }
+  if (message.type === 'clearAllData') {
+    sessions = [];
+    requests = [];
+    requestIndex = new Map();
+    sites = [];
+    uatConfigs = {};
+    currentSessionId = null;
+    settings.selectedSessionId = null;
+    settings.capturePaused = true;
+    saveState();
+    api.runtime.sendMessage({ type: 'sessionsUpdated', sessions, currentSessionId });
+    api.runtime.sendMessage({ type: 'sitesUpdated', sites });
+    api.runtime.sendMessage({ type: 'uatConfigsUpdated', uatConfigs });
+    sendResponse({ ok: true });
+    return true;
+  }
   if (message.type === 'capturedPayload') {
     if (!message.payload) {
       sendResponse({ ok: false });
@@ -306,6 +391,7 @@ api.webRequest.onBeforeRequest.addListener(
       const entry = requestIndex.get(details.requestId);
       if (entry) {
         entry.body = parseRawBody(details.requestBody, '');
+        evaluateUatForRequest(entry);
         saveState();
         api.runtime.sendMessage({ type: 'requestUpdated', request: entry });
       }
@@ -458,6 +544,7 @@ function attachPayloadToRequests(requestId, payload) {
     const idInUrl = getRequestIdFromUrl(entry.url);
     if (idInUrl && idInUrl === requestId) {
       entry.body = payload;
+      evaluateUatForRequest(entry);
       updated = true;
       api.runtime.sendMessage({ type: 'requestUpdated', request: entry });
     }
@@ -473,6 +560,7 @@ function attachPayloadToRequestsByUrl(tabId, url, payload) {
     if (entry.tabId !== tabId) return;
     if (entry.url !== url) return;
     entry.body = payload;
+    evaluateUatForRequest(entry);
     updated = true;
     api.runtime.sendMessage({ type: 'requestUpdated', request: entry });
   });
@@ -524,13 +612,14 @@ api.webRequest.onErrorOccurred.addListener(
 
 loadState();
 
-function createSession(name, site, lockTabId) {
+function createSession(name, site, lockTabId, uatEnabled) {
   return {
     id: `session-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
     name,
     site,
     lockTabId: lockTabId ?? null,
     paused: false,
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    uatEnabled: !!uatEnabled
   };
 }

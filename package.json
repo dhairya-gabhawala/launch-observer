@@ -1,12 +1,13 @@
 {
   "name": "launch-observer",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Browser extension to observe and inspect analytics network calls.",
   "scripts": {
     "build:css": "tailwindcss -i styles/tailwind.css -o styles/app.css --minify",
     "build:firefox": "node scripts/build-firefox.mjs",
-    "build:chrome": "node scripts/build-chrome.mjs"
+    "build:chrome": "node scripts/build-chrome.mjs",
+    "build:all": "npm run build:chrome && npm run build:firefox"
   },
   "devDependencies": {
     "tailwindcss": "^3.4.13"

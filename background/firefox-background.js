@@ -149,6 +149,241 @@ function getPathFromUrl(url) {
   return parsed.pathname || '/';
 }
 
+function normalizeUatConfig(config) {
+  if (!config || typeof config !== 'object') return { assertions: [] };
+  const assertions = Array.isArray(config.assertions) ? config.assertions : [];
+  return {
+    ...config,
+    assertions: assertions.map(assertion => normalizeAssertion(assertion))
+  };
+}
+
+function normalizeAssertion(assertion) {
+  const conditions = Array.isArray(assertion.conditions) ? assertion.conditions : [];
+  return {
+    id: assertion.id || `assertion-${Math.random().toString(16).slice(2)}`,
+    title: assertion.title || assertion.id || 'Assertion',
+    description: assertion.description || '',
+    logic: assertion.logic === 'any' ? 'any' : 'all',
+    conditions: conditions.map(cond => ({
+      source: cond.source || 'payload',
+      path: cond.path || '',
+      operator: cond.operator || 'exists',
+      expected: cond.expected
+    })),
+    scope: assertion.scope === 'page' ? 'page' : 'request',
+    count: assertion.count || null,
+    value: Number.isFinite(assertion.value) ? assertion.value : assertion.value
+  };
+}
+
+function evaluateAssertionsForRequest(request, assertions, allRequests) {
+  if (!request || !Array.isArray(assertions)) return [];
+  const results = [];
+  assertions.forEach(assertion => {
+    const isPageScope = assertion.scope === 'page';
+    const { conditionResults, applicable } = resolveRequestConditionResults(assertion, request);
+
+    if (!applicable) return;
+
+    let passed = assertion.logic === 'any'
+      ? conditionResults.some(c => c.passed)
+      : conditionResults.every(c => c.passed);
+
+    let countResult = null;
+    if (isPageScope && assertion.count && assertion.value !== undefined) {
+      const count = countAssertionMatches(assertion, allRequests, request);
+      const countPassed = evaluateCount(assertion.count, count, assertion.value);
+      passed = countPassed;
+      countResult = {
+        count: assertion.count,
+        expected: assertion.value,
+        actual: count
+      };
+    }
+
+    results.push({
+      id: assertion.id,
+      title: assertion.title,
+      description: assertion.description,
+      status: passed ? 'passed' : 'failed',
+      applicable,
+      logic: assertion.logic,
+      scope: assertion.scope,
+      conditions: conditionResults,
+      count: countResult
+    });
+  });
+  return results;
+}
+
+function resolveRequestConditionResults(assertion, request) {
+  const conditionResults = assertion.conditions.map(condition => {
+    const resolved = resolveConditionValue(condition, request);
+    const passed = evaluateCondition(condition, resolved.values);
+    return {
+      ...condition,
+      passed,
+      actual: resolved.values,
+      used: resolved.used
+    };
+  });
+  const applicable = conditionResults.some(c => c.used);
+  return { conditionResults, applicable };
+}
+
+
+function evaluateCondition(condition, values) {
+  const operator = condition.operator || 'exists';
+  const expected = condition.expected;
+  const list = Array.isArray(values) ? values : [values];
+  const hasValue = list.some(v => v !== undefined && v !== null && String(v).length > 0);
+
+  switch (operator) {
+    case 'exists':
+      return hasValue;
+    case 'not_exists':
+      return !hasValue;
+    case 'equals':
+      return list.some(v => String(v) === String(expected));
+    case 'contains':
+      return list.some(v => String(v).includes(String(expected)));
+    case 'starts_with':
+      return list.some(v => String(v).startsWith(String(expected)));
+    case 'ends_with':
+      return list.some(v => String(v).endsWith(String(expected)));
+    case 'regex': {
+      try {
+        const regex = new RegExp(String(expected));
+        return list.some(v => regex.test(String(v)));
+      } catch {
+        return false;
+      }
+    }
+    case 'in': {
+      const expectedList = Array.isArray(expected) ? expected.map(String) : [String(expected)];
+      return list.some(v => expectedList.includes(String(v)));
+    }
+    case 'not_in': {
+      const expectedList = Array.isArray(expected) ? expected.map(String) : [String(expected)];
+      return list.every(v => !expectedList.includes(String(v)));
+    }
+    case 'gt':
+      return list.some(v => Number(v) > Number(expected));
+    case 'gte':
+      return list.some(v => Number(v) >= Number(expected));
+    case 'lt':
+      return list.some(v => Number(v) < Number(expected));
+    case 'lte':
+      return list.some(v => Number(v) <= Number(expected));
+    case 'range': {
+      const range = Array.isArray(expected) ? expected : [];
+      return list.some(v => Number(v) >= Number(range[0]) && Number(v) <= Number(range[1]));
+    }
+    default:
+      return false;
+  }
+}
+
+function resolveConditionValue(condition, request) {
+  const source = condition.source || 'payload';
+  const path = condition.path || '';
+  if (source === 'payload') {
+    const payload = getPayloadObject(request);
+    if (!payload) return { used: false, values: [] };
+    const value = getValueAtPath(payload, path);
+    return { used: value !== undefined, values: normalizeValues(value) };
+  }
+  if (source === 'query') {
+    const params = (request.query && request.query.params) || [];
+    const matches = params.filter(p => p.key === path).map(p => p.value);
+    return { used: matches.length > 0, values: matches };
+  }
+  if (source === 'headers') {
+    const headers = request.requestHeaders || [];
+    const matches = headers.filter(h => h.name.toLowerCase() === path.toLowerCase()).map(h => h.value);
+    return { used: matches.length > 0, values: matches };
+  }
+  if (source === 'raw') {
+    const raw = request.body?.raw || '';
+    return { used: raw.length > 0, values: [raw] };
+  }
+  return { used: false, values: [] };
+}
+
+function getPayloadObject(request) {
+  if (!request?.body) return null;
+  if (request.body.parsed && typeof request.body.parsed === 'object') return request.body.parsed;
+  if (typeof request.body.raw === 'string') {
+    const json = tryParseJson(request.body.raw);
+    if (json) return json;
+    const form = parseKeyValuePairs(request.body.raw, true);
+    if (form.length) return Object.fromEntries(form.map(item => [item.key, item.value]));
+  }
+  return null;
+}
+
+function normalizeValues(value) {
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === 'object') return [JSON.stringify(value)];
+  if (value === undefined) return [];
+  return [value];
+}
+
+function getValueAtPath(obj, path) {
+  if (!path) return obj;
+  const tokens = parsePath(path);
+  let current = obj;
+  for (const token of tokens) {
+    if (current === null || current === undefined) return undefined;
+    if (typeof token === 'number') {
+      if (!Array.isArray(current)) return undefined;
+      current = current[token];
+    } else {
+      current = current[token];
+    }
+  }
+  return current;
+}
+
+function parsePath(path) {
+  const tokens = [];
+  path.split('.').forEach(segment => {
+    const parts = segment.split(/\\[|\\]/).filter(Boolean);
+    parts.forEach(part => {
+      const index = Number(part);
+      if (!Number.isNaN(index) && part.trim() !== '') {
+        tokens.push(index);
+      } else {
+        tokens.push(part);
+      }
+    });
+  });
+  return tokens.filter(t => t !== '');
+}
+
+function countAssertionMatches(assertion, allRequests, request) {
+  if (!Array.isArray(allRequests)) return 0;
+  const pageKey = request.navId ? `${request.pageUrl || request.url}::${request.navId}` : (request.pageUrl || request.url);
+  return allRequests.filter(item => {
+    const key = item.navId ? `${item.pageUrl || item.url}::${item.navId}` : (item.pageUrl || item.url);
+    if (key !== pageKey) return false;
+    const results = assertion.conditions.map(condition => {
+      const resolved = resolveConditionValue(condition, item);
+      return evaluateCondition(condition, resolved.values);
+    });
+    return assertion.logic === 'any' ? results.some(Boolean) : results.every(Boolean);
+  }).length;
+}
+
+function evaluateCount(mode, actual, expected) {
+  const expectedNumber = Number(expected);
+  if (!Number.isFinite(expectedNumber)) return false;
+  if (mode === 'at_least') return actual >= expectedNumber;
+  if (mode === 'at_most') return actual <= expectedNumber;
+  return actual === expectedNumber;
+}
+
 const DEFAULT_ALLOWLIST = [
   'edge.adobedc.net'
 ];
@@ -156,7 +391,7 @@ const DEFAULT_ALLOWLIST = [
 const DEFAULT_SETTINGS = {
   allowlist: DEFAULT_ALLOWLIST,
   capturePaused: false,
-  maxEntries: 500,
+  maxEntries: 2000,
   selectedSessionId: null,
   enableHooks: false,
   serviceMappings: []
@@ -171,6 +406,7 @@ let currentSessionId = null;
 let navState = new Map();
 let tabUrlCache = new Map();
 const payloadCacheByUrlTab = new Map();
+let uatConfigs = {};
 
 function storageGet(keys) {
   return new Promise(resolve => {
@@ -212,7 +448,7 @@ function tabsQuery(queryInfo) {
 }
 
 async function loadState() {
-  const stored = await storageGet(['settings', 'requests', 'sessions', 'sites', 'currentSessionId']);
+  const stored = await storageGet(['settings', 'requests', 'sessions', 'sites', 'currentSessionId', 'uatConfigs']);
   if (stored.settings) settings = { ...DEFAULT_SETTINGS, ...stored.settings };
   if (Array.isArray(stored.requests)) {
     requests = stored.requests;
@@ -221,12 +457,15 @@ async function loadState() {
   if (Array.isArray(stored.sessions)) sessions = stored.sessions;
   if (Array.isArray(stored.sites)) sites = stored.sites;
   if (stored.currentSessionId) currentSessionId = stored.currentSessionId;
+  if (stored.uatConfigs && typeof stored.uatConfigs === 'object') {
+    uatConfigs = Object.fromEntries(Object.entries(stored.uatConfigs).map(([key, value]) => [key, normalizeUatConfig(value)]));
+  }
   if (!currentSessionId) currentSessionId = sessions[0]?.id || null;
   if (!settings.selectedSessionId) settings.selectedSessionId = currentSessionId;
 }
 
 function saveState() {
-  return storageSet({ settings, requests, sessions, sites, currentSessionId });
+  return storageSet({ settings, requests, sessions, sites, currentSessionId, uatConfigs });
 }
 
 function isAllowed(url) {
@@ -256,6 +495,8 @@ function addRequest(details) {
   const requestId = getRequestIdFromUrl(details.url);
   const cachedPayload = requestId ? pullCachedPayload(requestId) : pullCachedPayloadByUrl(details.tabId, details.url, details.timeStamp);
   const pageUrl = nav.pageUrl || nav.pendingUrl || cachedUrl || extractPageUrlFromRequest(details.url) || null;
+  const session = sessions.find(s => s.id === sessionId);
+  const uatConfig = session?.site ? uatConfigs[session.site] : null;
   const entry = {
     id: `${details.requestId}:${details.timeStamp}`,
     requestId: details.requestId,
@@ -275,7 +516,8 @@ function addRequest(details) {
     query: parseQueryString(details.url),
     body: cachedPayload || null,
     pageUrl,
-    navId: nav.navId || null
+    navId: nav.navId || null,
+    uat: session?.uatEnabled && uatConfig ? { status: 'pending', results: [] } : null
   };
 
   requests.push(entry);
@@ -289,8 +531,30 @@ function updateRequest(requestId, patch) {
   const entry = requestIndex.get(requestId);
   if (!entry) return;
   Object.assign(entry, patch);
+  evaluateUatForRequest(entry);
   saveState();
   api.runtime.sendMessage({ type: 'requestUpdated', request: entry });
+}
+
+function evaluateUatForRequest(entry) {
+  if (!entry) return;
+  const session = sessions.find(s => s.id === entry.sessionId);
+  if (!session || !session.uatEnabled) {
+    entry.uat = null;
+    return;
+  }
+  const config = session.site ? uatConfigs[session.site] : null;
+  if (!config || !Array.isArray(config.assertions)) {
+    entry.uat = { status: 'not-applicable', results: [] };
+    return;
+  }
+  const sessionRequests = requests.filter(r => r.sessionId === entry.sessionId);
+  const results = evaluateAssertionsForRequest(entry, config.assertions, sessionRequests);
+  if (!results.length) {
+    entry.uat = { status: 'not-applicable', results: [] };
+    return;
+  }
+  entry.uat = { status: 'done', results };
 }
 
 api.runtime.onInstalled?.addListener(() => {
@@ -341,7 +605,7 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   if (message.type === 'getState') {
-    sendResponse({ settings, requests, sessions, sites, currentSessionId });
+    sendResponse({ settings, requests, sessions, sites, currentSessionId, uatConfigs });
     return true;
   }
   if (message.type === 'setSettings') {
@@ -349,6 +613,27 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     saveState();
     api.runtime.sendMessage({ type: 'settingsUpdated', settings });
     sendResponse({ ok: true, settings });
+    return true;
+  }
+  if (message.type === 'setUatConfig') {
+    const site = (message.site || '').trim();
+    if (!site || !message.config) {
+      sendResponse({ ok: false });
+      return true;
+    }
+    if (!sites.includes(site)) sites.unshift(site);
+    uatConfigs = { ...uatConfigs, [site]: normalizeUatConfig(message.config) };
+    requests.forEach(entry => {
+      const session = sessions.find(s => s.id === entry.sessionId);
+      if (!session || !session.uatEnabled) return;
+      if (session.site !== site) return;
+      evaluateUatForRequest(entry);
+      api.runtime.sendMessage({ type: 'requestUpdated', request: entry });
+    });
+    saveState();
+    api.runtime.sendMessage({ type: 'sitesUpdated', sites });
+    api.runtime.sendMessage({ type: 'uatConfigsUpdated', uatConfigs });
+    sendResponse({ ok: true, uatConfigs });
     return true;
   }
   if (message.type === 'clearRequests') {
@@ -372,7 +657,7 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
     }
     const name = (message.name || '').trim() || `Session ${sessions.length + 1}`;
-    const session = createSession(name, site, message.lockTabId || null);
+    const session = createSession(name, site, message.lockTabId || null, !!message.uatEnabled);
     sessions.unshift(session);
     if (!sites.includes(site)) sites.unshift(site);
     currentSessionId = session.id;
@@ -391,6 +676,21 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     saveState();
     api.runtime.sendMessage({ type: 'sessionsUpdated', sessions, currentSessionId });
     sendResponse({ ok: true });
+    return true;
+  }
+  if (message.type === 'updateSession') {
+    const session = sessions.find(s => s.id === message.id);
+    if (!session) {
+      sendResponse({ ok: false });
+      return true;
+    }
+    if (message.name !== undefined) session.name = message.name || session.name;
+    if (message.site) session.site = message.site;
+    if (message.lockTabId !== undefined) session.lockTabId = message.lockTabId;
+    if (message.uatEnabled !== undefined) session.uatEnabled = !!message.uatEnabled;
+    saveState();
+    api.runtime.sendMessage({ type: 'sessionsUpdated', sessions, currentSessionId });
+    sendResponse({ ok: true, session });
     return true;
   }
   if (message.type === 'selectSession') {
@@ -450,6 +750,22 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ ok: true });
     return true;
   }
+  if (message.type === 'clearAllData') {
+    sessions = [];
+    requests = [];
+    requestIndex = new Map();
+    sites = [];
+    uatConfigs = {};
+    currentSessionId = null;
+    settings.selectedSessionId = null;
+    settings.capturePaused = true;
+    saveState();
+    api.runtime.sendMessage({ type: 'sessionsUpdated', sessions, currentSessionId });
+    api.runtime.sendMessage({ type: 'sitesUpdated', sites });
+    api.runtime.sendMessage({ type: 'uatConfigsUpdated', uatConfigs });
+    sendResponse({ ok: true });
+    return true;
+  }
   if (message.type === 'capturedPayload') {
     if (!message.payload) {
       sendResponse({ ok: false });
@@ -486,6 +802,7 @@ api.webRequest.onBeforeRequest.addListener(
       const entry = requestIndex.get(details.requestId);
       if (entry) {
         entry.body = parseRawBody(details.requestBody, '');
+        evaluateUatForRequest(entry);
         saveState();
         api.runtime.sendMessage({ type: 'requestUpdated', request: entry });
       }
@@ -638,6 +955,7 @@ function attachPayloadToRequests(requestId, payload) {
     const idInUrl = getRequestIdFromUrl(entry.url);
     if (idInUrl && idInUrl === requestId) {
       entry.body = payload;
+      evaluateUatForRequest(entry);
       updated = true;
       api.runtime.sendMessage({ type: 'requestUpdated', request: entry });
     }
@@ -653,6 +971,7 @@ function attachPayloadToRequestsByUrl(tabId, url, payload) {
     if (entry.tabId !== tabId) return;
     if (entry.url !== url) return;
     entry.body = payload;
+    evaluateUatForRequest(entry);
     updated = true;
     api.runtime.sendMessage({ type: 'requestUpdated', request: entry });
   });
@@ -704,13 +1023,14 @@ api.webRequest.onErrorOccurred.addListener(
 
 loadState();
 
-function createSession(name, site, lockTabId) {
+function createSession(name, site, lockTabId, uatEnabled) {
   return {
     id: `session-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
     name,
     site,
     lockTabId: lockTabId ?? null,
     paused: false,
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    uatEnabled: !!uatEnabled
   };
 }

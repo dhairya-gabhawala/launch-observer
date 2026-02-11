@@ -25,7 +25,7 @@
             </div>
           </div>
           <div class="flex items-center gap-2 text-xs text-slate-500">
-            <div>v0.1.0</div>
+            <div>v0.1.2</div>
             <button id="open-help" class="inline-flex items-center justify-center rounded hover:text-slate-700" aria-label="Help">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" class="h-4 w-4">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" />
@@ -49,6 +49,7 @@
       </div>
       <div id="sidebar-bottom" class="p-3 border-t space-y-2 transition-shadow duration-200 mt-auto">
         <button id="clear-sessions" class="w-full text-sm px-3 py-2 border rounded text-rose-700 border-rose-200 hover:bg-rose-50">Clear All Sessions</button>
+        <button id="clear-data" class="w-full text-sm px-3 py-2 border rounded text-rose-700 border-rose-200 hover:bg-rose-50">Clear All Data</button>
       </div>
     </aside>
 
@@ -69,6 +70,25 @@
                 <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
               </svg>
               Manage Allowlist
+            </button>
+            <button id="manage-uat" data-tour="uat-assertions" class="inline-flex items-center gap-2 rounded border px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" class="h-4 w-4">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12h16.5M3.75 6h16.5M3.75 18h16.5" />
+              </svg>
+              UAT Assertions
+            </button>
+            <button id="view-uat-assertions" class="inline-flex items-center gap-2 rounded border px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.322c1.233-2.532 4.153-6.072 9.75-6.072 5.597 0 8.517 3.54 9.75 6.072a.75.75 0 0 1 0 .656c-1.233 2.532-4.153 6.072-9.75 6.072-5.597 0-8.517-3.54-9.75-6.072a.75.75 0 0 1 0-.656Z" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+              </svg>
+              See Assertions
+            </button>
+            <button id="open-uat-report" class="inline-flex items-center gap-2 rounded border px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" class="h-4 w-4">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m-6-8h6M7 3.75h10.5A1.5 1.5 0 0 1 19 5.25v13.5a1.5 1.5 0 0 1-1.5 1.5H7.5A1.5 1.5 0 0 1 6 18.75V5.25A1.5 1.5 0 0 1 7.5 3.75Z" />
+              </svg>
+              UAT Report
             </button>
           </div>
           <div class="mt-2 text-xs text-slate-500 flex items-center gap-3">
@@ -93,6 +113,17 @@
                   <div class="text-sm text-slate-500" id="detail-domain"></div>
                   <div class="text-sm font-semibold break-words" id="detail-url"></div>
                   <div class="mt-2 text-xs text-slate-500 flex flex-wrap gap-4" id="detail-meta"></div>
+                  <div class="mt-3 flex items-center justify-between gap-3">
+                    <div id="uat-status" class="flex items-center gap-2 text-xs text-slate-500">
+                      <span class="inline-flex h-4 w-4 items-center justify-center rounded-full border border-slate-300 text-slate-400">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-3 w-3">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l4 2" />
+                        </svg>
+                      </span>
+                      UAT not enabled for this session.
+                    </div>
+                    <button id="uat-open-drawer" class="text-xs font-medium text-slate-600 hover:text-slate-900 hidden" type="button">See results</button>
+                  </div>
                 </div>
                 <div class="px-6 py-4">
                   <div class="mb-3">
@@ -217,6 +248,20 @@
         <select id="session-lock-tab" class="mt-1 w-full border rounded px-3 py-2 text-sm"></select>
         <div class="mt-1 text-xs text-slate-500">Choose “All tabs” to listen everywhere.</div>
       </label>
+      <div class="flex items-start gap-3 text-sm text-slate-700">
+        <div class="flex h-6 shrink-0 items-center">
+          <div class="grid size-4 grid-cols-1">
+            <input id="session-uat-toggle" type="checkbox" class="peer col-start-1 row-start-1 appearance-none rounded-sm border border-slate-300 bg-white checked:border-slate-900 checked:bg-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900 disabled:border-slate-300 disabled:bg-slate-100 disabled:checked:bg-slate-100 forced-colors:appearance-auto" />
+            <svg viewBox="0 0 14 14" fill="none" class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white opacity-0 peer-checked:opacity-100 peer-disabled:stroke-slate-400/60">
+              <path d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </div>
+        </div>
+        <div class="min-w-0">
+          <label for="session-uat-toggle" class="font-medium">Perform UAT validations</label>
+          <div id="session-uat-note" class="text-xs text-slate-500">Uses the UAT assertions configured for this site.</div>
+        </div>
+      </div>
       <div class="flex justify-end gap-2">
         <button id="session-cancel" class="px-3 py-2 border rounded" type="button">Cancel</button>
         <button id="session-save" class="px-3 py-2 bg-slate-900 text-white rounded" value="default">Start</button>
@@ -226,12 +271,66 @@
 
   <dialog id="confirm-dialog" class="rounded-lg p-0 w-[420px]">
     <form method="dialog" class="p-6 space-y-4">
-      <div class="text-lg font-semibold">Clear all sessions?</div>
-      <div class="text-sm text-slate-600">This will delete all sessions and captured requests. This action cannot be undone.</div>
+      <div class="text-lg font-semibold" id="confirm-title">Clear all sessions?</div>
+      <div class="text-sm text-slate-600" id="confirm-body">This will delete all sessions and captured requests. This action cannot be undone.</div>
       <div class="flex justify-end gap-2">
         <button id="confirm-cancel" class="px-3 py-2 border rounded" type="button">Cancel</button>
         <button id="confirm-ok" class="px-3 py-2 bg-rose-600 text-white rounded" value="default">Clear</button>
       </div>
+    </form>
+  </dialog>
+
+  <dialog id="uat-dialog" class="rounded-lg p-0 w-[560px]">
+    <form method="dialog" class="p-6 space-y-4">
+      <div class="text-lg font-semibold">UAT Assertions</div>
+      <div class="text-sm text-slate-600">Import or replace assertion rules for a site.</div>
+      <label class="text-sm">
+        <span class="block text-slate-700">Site</span>
+        <div class="mt-1 flex items-center gap-2">
+          <select id="uat-site-select" class="flex-1 border rounded px-3 py-2 text-sm"></select>
+          <button id="uat-site-new" type="button" class="text-xs underline text-slate-700">New site</button>
+        </div>
+        <input id="uat-site-input" class="mt-2 w-full border rounded px-3 py-2 text-sm hidden" placeholder="Enter new site name" />
+      </label>
+      <div class="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+        Download a starter template, fill in your assertions, then import the JSON file.
+      </div>
+      <div id="uat-file-status" class="text-xs hidden"></div>
+      <div id="uat-file-errors" class="text-xs text-rose-600 hidden"></div>
+      <div class="flex flex-wrap items-center gap-2">
+        <button id="uat-download-template" type="button" class="text-xs underline text-slate-700">Download template</button>
+        <input id="uat-file-input" type="file" accept="application/json" class="text-xs" />
+      </div>
+      <div class="flex justify-end gap-2">
+        <button id="uat-cancel" class="px-3 py-2 border rounded" type="button">Cancel</button>
+        <button id="uat-import" type="button" class="px-3 py-2 rounded bg-slate-900 text-white text-xs">Import</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="uat-detail-dialog" class="rounded-lg p-0 w-[520px]">
+    <form method="dialog" class="p-6 space-y-4">
+      <div class="text-lg font-semibold" id="uat-detail-title">Assertion Details</div>
+      <div id="uat-detail-body" class="space-y-3 text-sm text-slate-700"></div>
+      <div class="flex justify-end">
+        <button class="px-3 py-2 border rounded" type="button" id="uat-detail-close">Close</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="uat-report-dialog" class="rounded-lg p-0 w-[760px] max-h-[80vh]">
+    <form method="dialog" class="flex max-h-[80vh] flex-col">
+      <div class="sticky top-0 z-10 border-b bg-white px-6 py-4 flex items-center justify-between">
+        <div>
+          <div class="text-lg font-semibold">UAT Report</div>
+          <div class="text-xs text-slate-500" id="uat-report-meta"></div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="uat-export" type="button" class="px-3 py-2 bg-slate-900 text-white rounded text-xs">Export PDF</button>
+          <button id="uat-report-close" type="button" class="px-3 py-2 border rounded text-xs">Close</button>
+        </div>
+      </div>
+      <div id="uat-report-body" class="flex-1 overflow-y-auto px-6 py-4 text-sm text-slate-700"></div>
     </form>
   </dialog>
 
@@ -260,6 +359,7 @@
           <button type="button" class="help-tab border-b-2 border-slate-900 px-1 py-3 text-sm font-medium text-slate-900" data-help-tab="overview">Overview</button>
           <button type="button" class="help-tab border-b-2 border-transparent px-1 py-3 text-sm font-medium text-slate-500 hover:border-slate-300 hover:text-slate-700" data-help-tab="getting-started">Getting Started</button>
           <button type="button" class="help-tab border-b-2 border-transparent px-1 py-3 text-sm font-medium text-slate-500 hover:border-slate-300 hover:text-slate-700" data-help-tab="tasks">Common Tasks</button>
+          <button type="button" class="help-tab border-b-2 border-transparent px-1 py-3 text-sm font-medium text-slate-500 hover:border-slate-300 hover:text-slate-700" data-help-tab="uat">UAT Assertions</button>
           <button type="button" class="help-tab border-b-2 border-transparent px-1 py-3 text-sm font-medium text-slate-500 hover:border-slate-300 hover:text-slate-700" data-help-tab="troubleshooting">Troubleshooting</button>
           <button type="button" class="help-tab border-b-2 border-transparent px-1 py-3 text-sm font-medium text-slate-500 hover:border-slate-300 hover:text-slate-700" data-help-tab="faq">FAQ</button>
         </nav>
@@ -279,6 +379,7 @@
                   <div><span class="font-semibold">Allowlist:</span> The domains you want to capture (for example, AEP Edge).</div>
                   <div><span class="font-semibold">Requests:</span> The network calls sent by the page.</div>
                   <div><span class="font-semibold">Payload:</span> The data inside a request, shown in a readable format.</div>
+                  <div><span class="font-semibold">UAT assertions:</span> Rules that validate your analytics data.</div>
                 </div>
               </div>
               <figure class="mt-4">
@@ -314,6 +415,11 @@
                 <li><span class="font-semibold">Check a page view or click:</span> Look for the event type inside the request to confirm a page view or link click.</li>
                 <li><span class="font-semibold">Add a custom domain:</span> Open Manage Allowlist, add the domain, and optionally map it to a known service.</li>
                 <li><span class="font-semibold">Pause a session:</span> Use the pause icon beside a session to stop listening.</li>
+                <li><span class="font-semibold">Create UAT assertions:</span> Download the template from <span class="font-semibold">UAT Assertions</span>, open it in a text editor, and add rules for your site (examples: event type exists, page name equals, only one pageview per page).</li>
+                <li><span class="font-semibold">Import UAT assertions:</span> In <span class="font-semibold">UAT Assertions</span>, select the site, upload the JSON, and click <span class="font-semibold">Import</span>.</li>
+                <li><span class="font-semibold">Validate UAT assertions:</span> Open <span class="font-semibold">UAT Assertions</span>, import your site’s JSON, then enable <span class="font-semibold">Perform UAT validations</span> when starting a session.</li>
+                <li><span class="font-semibold">Review assertions:</span> Click <span class="font-semibold">See Assertions</span> to inspect the active rules and download the JSON if needed.</li>
+                <li><span class="font-semibold">Export a UAT report:</span> Use <span class="font-semibold">UAT Report</span> to review pass/fail results and export a shareable PDF.</li>
               </ol>
               <figure class="mt-4">
                 <a href="assets/help/common-tasks.png" target="_blank" rel="noopener" class="block">
@@ -321,6 +427,96 @@
                 </a>
                 <figcaption class="mt-2 text-xs text-slate-500">Inspect payload details and search values.</figcaption>
               </figure>
+            </section>
+            <section id="uat" class="help-panel hidden">
+              <h3 class="help-section-title text-base font-semibold text-slate-900 mb-2">UAT Assertions</h3>
+              <div class="text-slate-600">UAT assertions are JSON rules that validate analytics calls for a site. Each assertion contains one or more conditions, plus optional page-level count rules.</div>
+              <div class="mt-3 text-slate-600">
+                <div class="font-semibold text-slate-900 mb-2">Top-level structure</div>
+                <ul class="list-disc pl-5 space-y-1">
+                  <li><span class="font-semibold">siteId</span> and <span class="font-semibold">siteName</span>: identify the site.</li>
+                  <li><span class="font-semibold">assertions</span>: array of assertion objects.</li>
+                </ul>
+              </div>
+              <div class="mt-3 text-slate-600">
+                <div class="font-semibold text-slate-900 mb-2">Assertion fields</div>
+                <ul class="list-disc pl-5 space-y-1">
+                  <li><span class="font-semibold">id</span>, <span class="font-semibold">title</span>, <span class="font-semibold">description</span></li>
+                  <li><span class="font-semibold">logic</span>: <span class="font-semibold">all</span> or <span class="font-semibold">any</span></li>
+                  <li><span class="font-semibold">scope</span>: <span class="font-semibold">request</span> or <span class="font-semibold">page</span></li>
+                  <li><span class="font-semibold">conditions</span>: list of checks for payload, query, headers, or raw body</li>
+                  <li><span class="font-semibold">count</span> + <span class="font-semibold">value</span>: page-level rules (exactly/at_least/at_most)</li>
+                </ul>
+              </div>
+              <div class="mt-3 text-slate-600">
+                <div class="font-semibold text-slate-900 mb-2">Condition fields</div>
+                <ul class="list-disc pl-5 space-y-1">
+                  <li><span class="font-semibold">source</span>: payload, query, headers, raw</li>
+                  <li><span class="font-semibold">path</span>: dotted path or array index (example: <span class="font-mono">events[0].xdm.eventType</span>)</li>
+                  <li><span class="font-semibold">operator</span>: exists, equals, contains, starts_with, ends_with, regex, in, not_in, gt, gte, lt, lte, range</li>
+                  <li><span class="font-semibold">expected</span>: required for most operators (string, number, or array)</li>
+                </ul>
+              </div>
+              <div class="mt-4 text-slate-600">
+                <div class="font-semibold text-slate-900 mb-2">Schema notes (required vs optional)</div>
+                <ul class="list-disc pl-5 space-y-1">
+                  <li><span class="font-semibold">siteId</span> (required): string identifier for the site.</li>
+                  <li><span class="font-semibold">siteName</span> (optional): human-friendly site label (string).</li>
+                  <li><span class="font-semibold">assertions</span> (required): array of assertion objects.</li>
+                  <li><span class="font-semibold">assertion.id</span> (required): unique string.</li>
+                  <li><span class="font-semibold">assertion.title</span> (optional): string shown in the UI.</li>
+                  <li><span class="font-semibold">assertion.description</span> (optional): string shown in the UI.</li>
+                  <li><span class="font-semibold">assertion.logic</span> (optional): <span class="font-semibold">all</span> or <span class="font-semibold">any</span> (default: all).</li>
+                  <li><span class="font-semibold">assertion.scope</span> (optional): <span class="font-semibold">request</span> or <span class="font-semibold">page</span> (default: request).</li>
+                  <li><span class="font-semibold">assertion.conditions</span> (required): array of condition objects.</li>
+                  <li><span class="font-semibold">assertion.count</span> (required only for scope=page): <span class="font-semibold">exactly</span>, <span class="font-semibold">at_least</span>, or <span class="font-semibold">at_most</span>.</li>
+                  <li><span class="font-semibold">assertion.value</span> (required only for scope=page): number.</li>
+                  <li><span class="font-semibold">condition.source</span> (optional): <span class="font-semibold">payload</span>, <span class="font-semibold">query</span>, <span class="font-semibold">headers</span>, or <span class="font-semibold">raw</span> (default: payload).</li>
+                  <li><span class="font-semibold">condition.path</span> (required unless source=raw): string path.</li>
+                  <li><span class="font-semibold">condition.operator</span> (required): string operator.</li>
+                  <li><span class="font-semibold">condition.expected</span> (required for comparison operators): string, number, or array.</li>
+                </ul>
+              </div>
+              <div class="mt-3 rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+                Tip: Use <span class="font-semibold">Download template</span> from the UAT Assertions dialog to get a starter file.
+              </div>
+              <div class="mt-4 rounded border border-slate-200 bg-white p-4 text-xs text-slate-700 overflow-x-auto">
+                <pre><code>{
+  "siteId": "example-site",
+  "siteName": "Example Site",
+  "assertions": [
+    {
+      "id": "pageview-once",
+      "title": "Pageview fires only once",
+      "description": "Ensure pageview event fires only once per page view.",
+      "logic": "all",
+      "conditions": [
+        {
+          "source": "payload",
+          "path": "events[0].xdm.eventType",
+          "operator": "equals",
+          "expected": "web.webpagedetails.pageViews"
+        }
+      ],
+      "scope": "page",
+      "count": "exactly",
+      "value": 1
+    },
+    {
+      "id": "page-name-present",
+      "title": "Page name is present",
+      "logic": "all",
+      "conditions": [
+        {
+          "source": "payload",
+          "path": "events[0]._experience.analytics.customDimensions.eVars.eVar41",
+          "operator": "exists"
+        }
+      ]
+    }
+  ]
+}</code></pre>
+              </div>
             </section>
             <section id="troubleshooting" class="help-panel hidden">
               <h3 class="help-section-title text-base font-semibold text-slate-900 mb-2">Troubleshooting</h3>
@@ -347,6 +543,26 @@
                 <div>
                   <div class="font-semibold text-slate-900 mb-1">Will it change what is sent?</div>
                   <div class="mt-1">No. It only reads what the page sends.</div>
+                </div>
+                <div>
+                  <div class="font-semibold text-slate-900 mb-1">What is a UAT assertion?</div>
+                  <div class="mt-1">A rule that checks whether a request contains the values you expect.</div>
+                </div>
+                <div>
+                  <div class="font-semibold text-slate-900 mb-1">Do UAT assertions edit or block requests?</div>
+                  <div class="mt-1">No. They only evaluate what the page already sent.</div>
+                </div>
+                <div>
+                  <div class="font-semibold text-slate-900 mb-1">What happens if a request does not match any assertion?</div>
+                  <div class="mt-1">It shows no UAT badge and is treated as not applicable.</div>
+                </div>
+                <div>
+                  <div class="font-semibold text-slate-900 mb-1">Can I reuse the same UAT file across sites?</div>
+                  <div class="mt-1">Yes, but it is best to create one JSON per site and update the siteId/siteName.</div>
+                </div>
+                <div>
+                  <div class="font-semibold text-slate-900 mb-1">Can I validate “only one pageview per page”?</div>
+                  <div class="mt-1">Yes. Use a page-scoped assertion with count set to <span class="font-semibold">exactly</span> and value set to 1.</div>
                 </div>
                 <div>
                   <div class="font-semibold text-slate-900 mb-1">Can I use it outside Adobe?</div>
@@ -385,6 +601,45 @@
       </div>
     </div>
   </div>
+
+  <aside id="uat-drawer" class="fixed inset-y-0 right-0 z-[70] w-full max-w-md translate-x-full bg-white shadow-2xl transition-transform duration-200">
+    <div class="flex items-center justify-between border-b px-4 py-3">
+      <div>
+        <div class="text-sm font-semibold">UAT Assertion Results</div>
+        <div id="uat-drawer-meta" class="text-xs text-slate-500"></div>
+      </div>
+      <button id="uat-close-drawer" class="rounded p-1 text-slate-500 hover:text-slate-700" aria-label="Close UAT results">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="h-5 w-5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+    <div id="uat-drawer-body" class="h-full overflow-y-auto px-4 py-3 text-sm text-slate-700"></div>
+  </aside>
+  <div id="uat-drawer-overlay" class="fixed inset-0 z-[65] hidden bg-slate-900/30"></div>
+
+  <aside id="uat-assertions-drawer" class="fixed inset-y-0 right-0 z-[70] w-full max-w-md translate-x-full bg-white shadow-2xl transition-transform duration-200">
+    <div class="flex items-center justify-between border-b px-4 py-3">
+      <div>
+        <div class="text-sm font-semibold">UAT Assertions</div>
+        <div id="uat-assertions-meta" class="text-xs text-slate-500"></div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="uat-assertions-download" class="rounded border px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50">Download JSON</button>
+        <button id="uat-assertions-close" class="rounded p-1 text-slate-500 hover:text-slate-700" aria-label="Close UAT assertions">
+          <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="border-b px-4 py-3">
+      <label class="text-xs font-medium text-slate-600">Site</label>
+      <select id="uat-assertions-site" class="mt-1 w-full rounded border px-2 py-1 text-sm"></select>
+    </div>
+    <div id="uat-assertions-body" class="h-full overflow-y-auto px-4 py-3 text-sm text-slate-700"></div>
+  </aside>
+  <div id="uat-assertions-overlay" class="fixed inset-0 z-[65] hidden bg-slate-900/30"></div>
 
   <script type="module" src="app/main.js"></script>
 </body>

@@ -16,6 +16,12 @@ const steps = [
     body: 'Use Manage Allowlist to include Adobe Experience Platform (AEP) Edge, Adobe Analytics, or any custom domains.'
   },
   {
+    id: 'uat-assertions',
+    target: '[data-tour="uat-assertions"]',
+    title: 'UAT Assertions',
+    body: 'Import your site’s UAT assertion JSON here. Then enable “Perform UAT validations” when starting a session to see pass/fail results.'
+  },
+  {
     id: 'sessions',
     target: '[data-tour="sessions"]',
     title: 'Sessions Sidebar',

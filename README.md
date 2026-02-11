@@ -10,6 +10,7 @@ Browser extension for observing analytics network calls with fully decoded paylo
 - JSON payload tree with search, copy path/value, and expand controls.
 - URL-encoded payloads displayed as key/value tables.
 - Popular services allowlist with custom domain mapping to services.
+- UAT assertions per site with pass/fail status, assertions viewer, and PDF-ready report export.
 
 ## Load in Chrome / Edge (Unpacked)
 1. Open `chrome://extensions`.
@@ -65,6 +66,29 @@ Background and content scripts:
 - Requests are stored in `chrome.storage.local` and capped by `maxEntries` (default: 2000).
 - Allowlist matches exact domain or any subdomain.
 - The UI entrypoint is `pages/app/main.js` (loaded as an ES module).
+
+## UAT Assertions
+- Import one JSON file per site via the **UAT Assertions** dialog.
+- Enable **Perform UAT validations** when starting a session.
+- Use **See Assertions** to view and download the current assertion config.
+- UAT results appear in request details and in the session UAT report.
+
+### UAT Schema Notes
+- `siteId` (required): string identifier for the site.
+- `siteName` (optional): human-friendly site label (string).
+- `assertions` (required): array of assertion objects.
+- `assertion.id` (required): unique string.
+- `assertion.title` (optional): string shown in the UI.
+- `assertion.description` (optional): string shown in the UI.
+- `assertion.logic` (optional): `all` or `any` (default: `all`).
+- `assertion.scope` (optional): `request` or `page` (default: `request`).
+- `assertion.conditions` (required): array of condition objects.
+- `assertion.count` (required only for `scope=page`): `exactly`, `at_least`, or `at_most`.
+- `assertion.value` (required only for `scope=page`): number.
+- `condition.source` (optional): `payload`, `query`, `headers`, or `raw` (default: `payload`).
+- `condition.path` (required unless `source=raw`): string path.
+- `condition.operator` (required): string operator.
+- `condition.expected` (required for comparison operators): string, number, or array.
 
 ## Documentation Site
 The GitHub Pages site lives in `docs/` with the landing page at `docs/index.html`

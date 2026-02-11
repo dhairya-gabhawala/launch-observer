@@ -1,9 +1,14 @@
 import { api, elements, state } from './state.js';
 import { DEFAULT_ALLOWLIST, buildAllowlistFromServices, createAllowlistRow, dedupeDomains, getCustomAllowlistEntries, renderAllowlistFields, renderAllowlistServices } from './allowlist.js';
 import { applySearch, selectRequest } from './requests.js';
-import { deleteSession, getSelectedSite, getSelectedTabId, openSessionDialog, renderSessions, selectSession, updateSessionSummary } from './sessions.js';
+import { deleteSession, getSelectedSite, getSelectedTabId, openSessionDialog, renderSessions, selectSession, updateSessionSummary, updateUatToggle } from './sessions.js';
 import { setActiveTab, toggleSidebar, toast } from './ui.js';
 import { initTour } from './tour.js';
+import { buildTemplateDownload, closeUatDetail, exportUatPdf, openUatReport, closeUatDrawer } from './uat.js';
+import { escapeHtml, setHTML } from './utils.js';
+import { validateUatConfig } from '../../lib/uat.js';
+
+let pendingUatConfig = null;
 
 function updateSettings(patch) {
   if (!state.settings) return;
@@ -23,6 +28,7 @@ function refreshState() {
     state.sessions = response.sessions || [];
     state.currentSessionId = response.currentSessionId || null;
     state.sites = response.sites || [];
+    state.uatConfigs = response.uatConfigs || {};
     applySearch();
     renderSessions();
     if (state.selectedId) selectRequest(state.selectedId);
@@ -55,6 +61,326 @@ if (elements.manageAllowlist) {
     }
     state.allowlistServiceSearch = '';
     elements.allowlistDialog.showModal();
+  });
+}
+
+if (elements.manageUat) {
+  elements.manageUat.addEventListener('click', () => {
+    const sites = Array.from(new Set(state.sites.filter(Boolean))).sort();
+    if (elements.uatSiteSelect) {
+      setHTML(elements.uatSiteSelect, sites.map(site => `<option value="${site}">${site}</option>`).join('') || '<option value=\"\">Select a site</option>');
+      const currentSite = state.sessions.find(s => s.id === state.settings?.selectedSessionId)?.site;
+      if (currentSite && sites.includes(currentSite)) elements.uatSiteSelect.value = currentSite;
+    }
+    if (elements.uatSiteInput) {
+      elements.uatSiteInput.classList.add('hidden');
+      elements.uatSiteInput.value = '';
+    }
+    if (elements.uatDialog) elements.uatDialog.showModal();
+  });
+}
+
+if (elements.uatCancel) {
+  elements.uatCancel.addEventListener('click', () => {
+    pendingUatConfig = null;
+    if (elements.uatFileInput) elements.uatFileInput.value = '';
+    if (elements.uatFileStatus) {
+      elements.uatFileStatus.textContent = '';
+      elements.uatFileStatus.classList.add('hidden');
+    }
+    if (elements.uatFileErrors) {
+      elements.uatFileErrors.textContent = '';
+      elements.uatFileErrors.classList.add('hidden');
+    }
+    elements.uatDialog?.close();
+  });
+}
+
+if (elements.uatDownloadTemplate) {
+  elements.uatDownloadTemplate.addEventListener('click', () => {
+    buildTemplateDownload();
+  });
+}
+
+if (elements.uatFileInput) {
+  elements.uatFileInput.addEventListener('change', async event => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      pendingUatConfig = JSON.parse(text);
+      const errors = validateUatConfig(pendingUatConfig);
+      if (errors.length) {
+        pendingUatConfig = null;
+        if (elements.uatFileErrors) {
+          elements.uatFileErrors.textContent = errors.join(' ');
+          elements.uatFileErrors.classList.remove('hidden');
+        }
+        if (elements.uatFileStatus) {
+          elements.uatFileStatus.textContent = 'UAT file failed validation.';
+          elements.uatFileStatus.classList.remove('hidden');
+          elements.uatFileStatus.classList.remove('text-emerald-600');
+          elements.uatFileStatus.classList.add('text-rose-600');
+        }
+      } else if (elements.uatFileStatus) {
+        elements.uatFileStatus.textContent = 'UAT file ready. Click Import to apply.';
+        elements.uatFileStatus.classList.remove('hidden');
+        elements.uatFileStatus.classList.remove('text-rose-600');
+        elements.uatFileStatus.classList.add('text-emerald-600');
+        if (elements.uatFileErrors) {
+          elements.uatFileErrors.textContent = '';
+          elements.uatFileErrors.classList.add('hidden');
+        }
+      }
+    } catch {
+      pendingUatConfig = null;
+      toast('Invalid JSON file', 'Please upload a valid assertion config.');
+      if (elements.uatFileStatus) {
+        elements.uatFileStatus.textContent = 'Invalid JSON file. Please upload a valid assertion config.';
+        elements.uatFileStatus.classList.remove('hidden');
+        elements.uatFileStatus.classList.remove('text-emerald-600');
+        elements.uatFileStatus.classList.add('text-rose-600');
+      }
+      if (elements.uatFileErrors) {
+        elements.uatFileErrors.textContent = '';
+        elements.uatFileErrors.classList.add('hidden');
+      }
+    }
+  });
+}
+
+if (elements.uatImport) {
+  elements.uatImport.addEventListener('click', () => {
+    const site = getUatSelectedSite();
+    if (!site) {
+      toast('Select a site first');
+      return;
+    }
+    if (!pendingUatConfig) {
+      toast('No file selected', 'Choose a JSON file first.');
+      return;
+    }
+    const errors = validateUatConfig(pendingUatConfig);
+    if (errors.length) {
+      if (elements.uatFileErrors) {
+        elements.uatFileErrors.textContent = errors.join(' ');
+        elements.uatFileErrors.classList.remove('hidden');
+      }
+      if (elements.uatFileStatus) {
+        elements.uatFileStatus.textContent = 'UAT file failed validation.';
+        elements.uatFileStatus.classList.remove('hidden');
+        elements.uatFileStatus.classList.remove('text-emerald-600');
+        elements.uatFileStatus.classList.add('text-rose-600');
+      }
+      return;
+    }
+    if (!state.sites.includes(site)) {
+      state.sites = [site, ...state.sites];
+      api.runtime.sendMessage({ type: 'sitesUpdated', sites: state.sites });
+    }
+    api.runtime.sendMessage({ type: 'setUatConfig', site, config: pendingUatConfig }, response => {
+      if (response?.uatConfigs) {
+        state.uatConfigs = response.uatConfigs;
+        toast('UAT assertions updated', `Loaded ${pendingUatConfig.assertions?.length || 0} assertions.`);
+        pendingUatConfig = null;
+        if (elements.uatFileInput) elements.uatFileInput.value = '';
+        if (elements.uatFileStatus) {
+          elements.uatFileStatus.textContent = '';
+          elements.uatFileStatus.classList.add('hidden');
+        }
+        if (elements.uatFileErrors) {
+          elements.uatFileErrors.textContent = '';
+          elements.uatFileErrors.classList.add('hidden');
+        }
+        if (elements.uatSiteInput) {
+          elements.uatSiteInput.classList.add('hidden');
+          elements.uatSiteInput.value = '';
+        }
+        if (elements.uatSiteSelect) {
+          const sites = Array.from(new Set(state.sites.filter(Boolean))).sort();
+          setHTML(elements.uatSiteSelect, sites.map(value => `<option value="${value}">${value}</option>`).join('') || '<option value=\"\">Select a site</option>');
+          if (site) elements.uatSiteSelect.value = site;
+        }
+        if (elements.uatDialog) elements.uatDialog.close();
+      } else {
+        toast('Failed to update UAT assertions');
+      }
+    });
+  });
+}
+
+if (elements.uatSiteNew) {
+  elements.uatSiteNew.addEventListener('click', () => {
+    if (!elements.uatSiteInput) return;
+    elements.uatSiteInput.classList.toggle('hidden');
+    if (!elements.uatSiteInput.classList.contains('hidden')) {
+      elements.uatSiteInput.focus();
+    }
+  });
+}
+
+function getUatSelectedSite() {
+  const custom = elements.uatSiteInput && !elements.uatSiteInput.classList.contains('hidden')
+    ? elements.uatSiteInput.value.trim()
+    : '';
+  if (custom) return custom;
+  return (elements.uatSiteSelect?.value || '').trim();
+}
+
+
+if (elements.openUatReport) {
+  elements.openUatReport.addEventListener('click', () => {
+    openUatReport();
+  });
+}
+
+if (elements.uatExport) {
+  elements.uatExport.addEventListener('click', () => {
+    exportUatPdf();
+  });
+}
+
+if (elements.uatReportClose) {
+  elements.uatReportClose.addEventListener('click', () => {
+    elements.uatReportDialog?.close();
+  });
+}
+
+if (elements.uatDetailClose) {
+  elements.uatDetailClose.addEventListener('click', () => {
+    closeUatDetail();
+  });
+}
+
+if (elements.uatCloseDrawer) {
+  elements.uatCloseDrawer.addEventListener('click', () => {
+    closeUatDrawer();
+  });
+}
+
+function renderUatAssertionsDrawer(site, config) {
+  if (!elements.uatAssertionsBody) return;
+  const assertions = config?.assertions || [];
+  if (!site) {
+    setHTML(elements.uatAssertionsBody, '<div class="text-sm text-slate-500">Select a site to view assertions.</div>');
+    return;
+  }
+  if (!assertions.length) {
+    setHTML(elements.uatAssertionsBody, '<div class="text-sm text-slate-500">No assertions imported for this site yet.</div>');
+    return;
+  }
+  setHTML(elements.uatAssertionsBody, assertions.map(item => {
+    const title = item.title || item.id || 'Assertion';
+    const description = item.description ? `<div class="mt-1 text-xs text-slate-500">${escapeHtml(item.description)}</div>` : '';
+    const scope = item.scope ? `<span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">${escapeHtml(item.scope)}</span>` : '';
+    const logic = item.logic ? `<span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">${escapeHtml(item.logic)}</span>` : '';
+    const chips = (scope || logic) ? `<div class="mt-2 flex gap-2">${scope}${logic}</div>` : '';
+    const count = item.count && item.value !== undefined
+      ? `<div class="mt-2 text-xs text-slate-600"><span class="font-semibold text-slate-700">Count</span> <span class="text-slate-400">•</span> ${escapeHtml(item.count)} = ${escapeHtml(String(item.value))}</div>`
+      : '';
+    const conditions = Array.isArray(item.conditions) && item.conditions.length
+      ? `<div class="mt-3 space-y-2">
+          ${item.conditions.map(cond => {
+            const source = escapeHtml(cond.source || 'payload');
+            const path = escapeHtml(cond.path || '');
+            const operator = escapeHtml(cond.operator || 'exists');
+            const expected = cond.expected !== undefined ? `<span class="text-slate-500">"${escapeHtml(String(cond.expected))}"</span>` : '';
+            return `
+              <div class="rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700">
+                <div><span class="font-semibold">${source}</span> · <span class="text-slate-500">${path || 'raw'}</span></div>
+                <div class="text-slate-600">${operator}${expected ? ` · ${expected}` : ''}</div>
+              </div>
+            `;
+          }).join('')}
+        </div>`
+      : '';
+    return `
+      <details class="rounded border border-slate-200 bg-white p-3 mb-3">
+        <summary class="flex cursor-pointer items-center justify-between text-sm font-semibold text-slate-800">
+          <span>${escapeHtml(title)}</span>
+          <svg viewBox="0 0 16 16" fill="currentColor" class="size-4 text-slate-400">
+            <path d="M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z" />
+          </svg>
+        </summary>
+        <div class="mt-2">
+          ${description}
+          ${chips}
+          ${count}
+          ${conditions}
+        </div>
+      </details>
+    `;
+  }).join(''));
+}
+
+function openUatAssertionsDrawer() {
+  const activeSite = state.sessions.find(s => s.id === state.settings?.selectedSessionId)?.site || '';
+  const sites = Array.from(new Set(Object.keys(state.uatConfigs || {}))).sort();
+  if (elements.uatAssertionsSite) {
+    setHTML(elements.uatAssertionsSite, sites.map(value => `<option value="${value}">${value}</option>`).join('') || '<option value=\"\">Select a site</option>');
+    if (activeSite && sites.includes(activeSite)) {
+      elements.uatAssertionsSite.value = activeSite;
+    }
+  }
+  const selectedSite = elements.uatAssertionsSite?.value || activeSite || '';
+  const config = selectedSite ? state.uatConfigs?.[selectedSite] : null;
+  if (elements.uatAssertionsMeta) {
+    elements.uatAssertionsMeta.textContent = selectedSite ? `Site: ${selectedSite}` : 'No site selected';
+  }
+  renderUatAssertionsDrawer(selectedSite, config);
+  elements.uatAssertionsDrawer?.classList.remove('translate-x-full');
+  elements.uatAssertionsOverlay?.classList.remove('hidden');
+  if (elements.uatAssertionsOverlay) {
+    elements.uatAssertionsOverlay.onclick = () => closeUatAssertionsDrawer();
+  }
+}
+
+function closeUatAssertionsDrawer() {
+  elements.uatAssertionsDrawer?.classList.add('translate-x-full');
+  elements.uatAssertionsOverlay?.classList.add('hidden');
+}
+
+if (elements.viewUatAssertions) {
+  elements.viewUatAssertions.addEventListener('click', () => {
+    openUatAssertionsDrawer();
+  });
+}
+
+if (elements.uatAssertionsClose) {
+  elements.uatAssertionsClose.addEventListener('click', () => {
+    closeUatAssertionsDrawer();
+  });
+}
+
+if (elements.uatAssertionsDownload) {
+  elements.uatAssertionsDownload.addEventListener('click', () => {
+    const site = elements.uatAssertionsSite?.value
+      || state.sessions.find(s => s.id === state.settings?.selectedSessionId)?.site
+      || '';
+    if (!site || !state.uatConfigs?.[site]) {
+      toast('No UAT config available');
+      return;
+    }
+    const blob = new Blob([JSON.stringify(state.uatConfigs[site], null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${site}-uat-assertions.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  });
+}
+
+if (elements.uatAssertionsSite) {
+  elements.uatAssertionsSite.addEventListener('change', () => {
+    const site = elements.uatAssertionsSite?.value || '';
+    const config = site ? state.uatConfigs?.[site] : null;
+    if (elements.uatAssertionsMeta) {
+      elements.uatAssertionsMeta.textContent = site ? `Site: ${site}` : 'No site selected';
+    }
+    renderUatAssertionsDrawer(site, config);
   });
 }
 
@@ -127,10 +453,9 @@ if (elements.sessionSave) {
     }
     const name = elements.sessionNameInput.value.trim();
     const lockTabId = getSelectedTabId();
+    const uatEnabled = !!elements.sessionUatToggle?.checked;
     if (state.sessionMode === 'rename' && state.sessionEditId) {
-      api.runtime.sendMessage({ type: 'renameSession', id: state.sessionEditId, name }, () => {
-        const session = state.sessions.find(s => s.id === state.sessionEditId);
-        if (session) session.name = name || session.name;
+      api.runtime.sendMessage({ type: 'updateSession', id: state.sessionEditId, name, site, lockTabId, uatEnabled }, () => {
         elements.sessionDialog.close();
         renderSessions();
         updateSessionSummary();
@@ -139,7 +464,7 @@ if (elements.sessionSave) {
       return;
     }
 
-    api.runtime.sendMessage({ type: 'startSession', name, site, lockTabId }, response => {
+    api.runtime.sendMessage({ type: 'startSession', name, site, lockTabId, uatEnabled }, response => {
       if (!response?.session) return;
       state.settings.selectedSessionId = response.session.id;
       state.settings.capturePaused = false;
@@ -160,11 +485,40 @@ if (elements.sessionSiteNew) {
     if (!elements.sessionSiteInput.classList.contains('hidden')) {
       elements.sessionSiteInput.focus();
     }
+    updateUatToggle();
+  });
+}
+
+if (elements.sessionSiteSelect) {
+  elements.sessionSiteSelect.addEventListener('change', () => {
+    if (elements.sessionSiteInput) {
+      elements.sessionSiteInput.classList.add('hidden');
+      elements.sessionSiteInput.value = '';
+    }
+    updateUatToggle();
+  });
+}
+
+if (elements.sessionSiteInput) {
+  elements.sessionSiteInput.addEventListener('input', () => {
+    updateUatToggle();
   });
 }
 
 if (elements.clearSessions) {
   elements.clearSessions.addEventListener('click', () => {
+    if (elements.confirmTitle) elements.confirmTitle.textContent = 'Clear all sessions?';
+    if (elements.confirmBody) elements.confirmBody.textContent = 'This will delete all sessions and captured requests. This action cannot be undone.';
+    elements.confirmDialog.dataset.action = '';
+    elements.confirmDialog.showModal();
+  });
+}
+
+if (elements.clearData) {
+  elements.clearData.addEventListener('click', () => {
+    if (elements.confirmTitle) elements.confirmTitle.textContent = 'Clear all data?';
+    if (elements.confirmBody) elements.confirmBody.textContent = 'This will delete sessions, requests, sites, and UAT assertions. This action cannot be undone.';
+    elements.confirmDialog.dataset.action = 'clear-all-data';
     elements.confirmDialog.showModal();
   });
 }
@@ -177,6 +531,27 @@ if (elements.confirmCancel) {
 
 if (elements.confirmOk) {
   elements.confirmOk.addEventListener('click', () => {
+    const action = elements.confirmDialog.dataset.action;
+    if (action === 'clear-all-data') {
+      api.runtime.sendMessage({ type: 'clearAllData' }, () => {
+        state.sessions = [];
+        state.requests = [];
+        state.filtered = [];
+        state.selectedId = null;
+        state.sites = [];
+        state.uatConfigs = {};
+        state.settings.selectedSessionId = null;
+        elements.details.classList.add('hidden');
+        elements.observingState.classList.add('hidden');
+        elements.emptyState.classList.remove('hidden');
+        renderSessions();
+        applySearch();
+        updateSessionSummary();
+        toast('All data cleared');
+        elements.confirmDialog.close();
+      });
+      return;
+    }
     api.runtime.sendMessage({ type: 'clearSessions' }, () => {
       state.sessions = [];
       state.requests = [];
@@ -279,9 +654,16 @@ api.runtime.onMessage.addListener(message => {
     const idx = state.requests.findIndex(r => r.id === message.request.id);
     if (idx !== -1) state.requests[idx] = message.request;
     applySearch();
+    if (state.selectedId === message.request.id) {
+      selectRequest(state.selectedId);
+    }
   }
   if (message.type === 'settingsUpdated') {
     state.settings = message.settings;
+  }
+  if (message.type === 'uatConfigsUpdated') {
+    state.uatConfigs = message.uatConfigs || {};
+    updateUatToggle();
   }
   if (message.type === 'requestsCleared') {
     const sessionId = state.settings?.selectedSessionId;

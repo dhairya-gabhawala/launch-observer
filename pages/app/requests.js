@@ -3,6 +3,7 @@ import { escapeHtml, formatDuration, formatTime, hashString, toTitleCase, highli
 import { renderServiceIcon } from './allowlist.js';
 import { bindPayloadActions, highlightJson, renderJson, tryParseFormEncoded, tryParseJsonString } from './payload.js';
 import { setActiveTab, toggleSidebar } from './ui.js';
+import { renderUatForRequest } from './uat.js';
 
 export function applySearch() {
   const term = state.search.toLowerCase();
@@ -34,22 +35,48 @@ export function renderList() {
       const groupId = `group-${hashString(group.key)}`;
       const rows = [...group.items].sort((a, b) => (b.timeStamp || 0) - (a.timeStamp || 0)).map(req => {
         const active = req.id === state.selectedId ? 'bg-slate-50' : 'bg-white';
-        const status = req.statusCode ? `<span class="text-xs text-emerald-600">${req.statusCode}</span>` : '<span class="text-xs text-slate-400">pending</span>';
+        const statusText = req.statusCode ? `${req.statusCode}` : 'pending';
+        const statusClass = req.statusCode
+          ? (req.statusCode < 400 ? 'text-emerald-600' : 'text-rose-600')
+          : 'text-slate-400';
         const eventLabel = getEventTypeLabel(req);
         const icon = renderServiceIcon(req);
-        const description = getRequestDescription(req, eventLabel);
+        const contextLabel = getAdobeAnalyticsContext(req);
+        const pathLabel = contextLabel
+          ? `${contextLabel}${eventLabel ? ` · ${eventLabel}` : ''}`
+          : `${req.path}${eventLabel ? ` · ${eventLabel}` : ''}`;
+        const description = `${escapeHtml(req.method || '')} · <span class="${statusClass}">${escapeHtml(statusText)}</span> · ${escapeHtml(pathLabel || '')}`;
+        const uatApplicable = req.uat?.results?.some(r => r.applicable !== false);
+        const uatStatus = uatApplicable
+          ? (req.uat?.results?.some(r => r.status === 'failed' && r.applicable !== false)
+            ? `<span class="ml-2 inline-flex items-center gap-1 text-[10px] font-semibold text-rose-600">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="size-4" aria-label="UAT failed">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 9.75 14.25 14.25m0-4.5-4.5 4.5M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z" />
+                </svg>
+                Fail
+              </span>`
+            : `<span class="ml-2 inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="size-4" aria-label="UAT passed">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z" />
+                </svg>
+                Pass
+              </span>`)
+          : '';
         return `
           <button class="w-full text-left px-4 py-3 border-b hover:bg-slate-50 ${active}" data-request-id="${req.id}">
             <div class="flex items-start justify-between gap-3">
               <div class="flex items-start gap-2 min-w-0">
                 <div class="flex-shrink-0">${icon}</div>
                 <div class="min-w-0">
-                  <div class="text-sm font-semibold truncate">${req.domain}</div>
+                  <div class="text-sm font-semibold flex items-center gap-1 min-w-0">
+                    <span class="truncate">${req.domain}</span>
+                    ${uatStatus}
+                  </div>
                   <div class="text-xs text-slate-500 truncate">${description}</div>
                   <div class="text-xs text-slate-400">${formatTime(req.timeStamp)}</div>
                 </div>
               </div>
-              ${status}
+              <span class="text-xs text-slate-400 whitespace-nowrap shrink-0">${formatTime(req.timeStamp)}</span>
             </div>
           </button>
         `;
@@ -58,8 +85,7 @@ export function renderList() {
         <details class="border-b" open>
           <summary class="cursor-pointer px-4 py-2 text-xs font-semibold text-slate-600 flex items-center justify-between">
             <span class="truncate">${escapeHtml(group.title)}</span>
-            <span class="text-slate-400">${group.subtitle}</span>
-            <span class="text-slate-400">${count}</span>
+            <span class="text-slate-400">${group.subtitle} | ${count} request${count === 1 ? '' : 's'}</span>
           </summary>
           <div id="${groupId}">
             ${rows}
@@ -192,6 +218,7 @@ export function selectRequest(id) {
   if (state.activeTab) {
     setActiveTab(state.activeTab);
   }
+  renderUatForRequest(req);
   renderList();
 }
 

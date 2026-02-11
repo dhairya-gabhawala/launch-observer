@@ -203,6 +203,10 @@ export function openSessionDialog(session) {
   } else {
     elements.sessionLockTab.value = 'all';
   }
+  if (elements.sessionUatToggle) {
+    elements.sessionUatToggle.checked = !!session?.uatEnabled;
+  }
+  updateUatToggle();
   elements.sessionDialog.showModal();
 }
 
@@ -226,4 +230,19 @@ export function getTabLabel(lockTabId) {
   const tab = state.tabsCache.find(t => t.id === lockTabId);
   if (tab) return tab.title || tab.url || `Tab ${lockTabId}`;
   return `Tab ${lockTabId}`;
+}
+
+export function updateUatToggle() {
+  if (!elements.sessionUatToggle || !elements.sessionUatNote) return;
+  const site = getSelectedSite();
+  const config = site ? state.uatConfigs?.[site] : null;
+  if (!config) {
+    elements.sessionUatToggle.checked = false;
+    elements.sessionUatToggle.disabled = true;
+    elements.sessionUatNote.textContent = 'No UAT config for this site. Import assertions to enable.';
+    return;
+  }
+  elements.sessionUatToggle.disabled = false;
+  const count = Array.isArray(config.assertions) ? config.assertions.length : 0;
+  elements.sessionUatNote.textContent = `Uses ${count} assertion${count === 1 ? '' : 's'} for this site.`;
 }
