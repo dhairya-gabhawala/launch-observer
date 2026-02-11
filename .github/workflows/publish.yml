@@ -32,33 +32,6 @@ jobs:
           name: launch-observer
           path: launch-observer.zip
 
-  publish-chrome:
-    needs: build
-    runs-on: ubuntu-latest
-    if: ${{ secrets.CHROME_EXTENSION_ID != '' && secrets.CHROME_CLIENT_ID != '' && secrets.CHROME_CLIENT_SECRET != '' && secrets.CHROME_REFRESH_TOKEN != '' }}
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: launch-observer
-      - name: Upload and Publish to Chrome Web Store
-        run: |
-          npx chrome-webstore-upload-cli@2 upload \
-            --source launch-observer.zip \
-            --extension-id "${CHROME_EXTENSION_ID}" \
-            --client-id "${CHROME_CLIENT_ID}" \
-            --client-secret "${CHROME_CLIENT_SECRET}" \
-            --refresh-token "${CHROME_REFRESH_TOKEN}"
-          npx chrome-webstore-upload-cli@2 publish \
-            --extension-id "${CHROME_EXTENSION_ID}" \
-            --client-id "${CHROME_CLIENT_ID}" \
-            --client-secret "${CHROME_CLIENT_SECRET}" \
-            --refresh-token "${CHROME_REFRESH_TOKEN}"
-        env:
-          CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
-          CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
-          CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
-          CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
-
   publish-firefox:
     needs: build
     runs-on: ubuntu-latest
