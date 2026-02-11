@@ -16,6 +16,13 @@ Browser extension for observing analytics network calls with fully decoded paylo
 2. Enable **Developer mode**.
 3. Click **Load unpacked** and select `launch-observer`.
 
+## Build Chrome / Edge ZIP
+```
+npm run build:chrome
+```
+
+This generates `dist/chrome.zip` for Chrome Web Store or Edge Add-ons.
+
 ## Load in Firefox (Stable)
 Firefox Stable requires a Manifest V2 build.
 
@@ -55,9 +62,13 @@ Background and content scripts:
 - `content/inject.js`
 
 ## Notes
-- Requests are stored in `chrome.storage.local` and capped by `maxEntries`.
+- Requests are stored in `chrome.storage.local` and capped by `maxEntries` (default: 2000).
 - Allowlist matches exact domain or any subdomain.
 - The UI entrypoint is `pages/app/main.js` (loaded as an ES module).
+
+## Documentation Site
+The GitHub Pages site lives in `docs/` with the landing page at `docs/index.html`
+and the privacy policy at `docs/privacy.html`.
 
 ## Publishing
 This repo includes a GitHub Actions workflow to build and publish a release package.

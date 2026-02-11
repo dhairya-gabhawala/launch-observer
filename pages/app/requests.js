@@ -124,40 +124,48 @@ export function selectRequest(id) {
   }
   if (elements.payloadSearch) elements.payloadSearch.value = state.payloadSearch;
 
+  const payloadNotice = req.body?.truncated
+    ? '<div class="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">Payload truncated for performance. Showing the first 200,000 characters.</div>'
+    : '';
+
   if (!req.body) {
     setHTML(elements.detailPayload, '<div class="text-slate-500 text-sm">No payload</div>');
     if (elements.payloadTools) elements.payloadTools.classList.add('hidden');
   } else if (req.body.type === 'json' && req.body.parsed) {
-    setHTML(elements.detailPayload, renderJson(req.body.parsed, state.payloadSearch));
+    setHTML(elements.detailPayload, `${payloadNotice}${renderJson(req.body.parsed, state.payloadSearch)}`);
     if (elements.payloadTools) elements.payloadTools.classList.remove('hidden');
     if (elements.payloadExpandTools) elements.payloadExpandTools.classList.remove('hidden');
     scrollFirstMatch(elements.detailPayload);
   } else if ((req.body.type === 'form' || req.body.type === 'formData') && req.body.parsed) {
-    setHTML(elements.detailPayload, renderKeyValueTable(req.body.parsed.params || [], state.payloadSearch));
+    setHTML(elements.detailPayload, `${payloadNotice}${renderKeyValueTable(req.body.parsed.params || [], state.payloadSearch)}`);
     if (elements.payloadTools) elements.payloadTools.classList.remove('hidden');
     if (elements.payloadExpandTools) elements.payloadExpandTools.classList.add('hidden');
     scrollFirstMatch(elements.detailPayload);
   } else if (req.body.type === 'text' && req.body.raw) {
     const parsed = tryParseJsonString(req.body.raw);
     if (parsed) {
-      setHTML(elements.detailPayload, renderJson(parsed, state.payloadSearch));
+      setHTML(elements.detailPayload, `${payloadNotice}${renderJson(parsed, state.payloadSearch)}`);
       if (elements.payloadTools) elements.payloadTools.classList.remove('hidden');
       if (elements.payloadExpandTools) elements.payloadExpandTools.classList.remove('hidden');
       scrollFirstMatch(elements.detailPayload);
     } else {
       const formParsed = tryParseFormEncoded(req.body.raw);
       if (formParsed) {
-        setHTML(elements.detailPayload, renderKeyValueTable(formParsed.params || [], state.payloadSearch));
+        setHTML(elements.detailPayload, `${payloadNotice}${renderKeyValueTable(formParsed.params || [], state.payloadSearch)}`);
         if (elements.payloadTools) elements.payloadTools.classList.remove('hidden');
         if (elements.payloadExpandTools) elements.payloadExpandTools.classList.add('hidden');
         scrollFirstMatch(elements.detailPayload);
       } else {
-        setHTML(elements.detailPayload, `<pre class="text-xs whitespace-pre-wrap rounded border bg-slate-50 p-3">${escapeHtml(req.body.raw || '')}</pre>`);
+        setHTML(elements.detailPayload, `${payloadNotice}<pre class="text-xs whitespace-pre-wrap rounded border bg-slate-50 p-3">${escapeHtml(req.body.raw || '')}</pre>`);
         if (elements.payloadTools) elements.payloadTools.classList.add('hidden');
       }
     }
   } else {
-    setHTML(elements.detailPayload, `<pre class="text-xs whitespace-pre-wrap rounded border bg-slate-50 p-3">${escapeHtml(req.body.raw || '')}</pre>`);
+    if (!req.body.raw && !req.body.parsed) {
+      setHTML(elements.detailPayload, '<div class="text-slate-500 text-sm">Payload unavailable</div>');
+    } else {
+      setHTML(elements.detailPayload, `${payloadNotice}<pre class="text-xs whitespace-pre-wrap rounded border bg-slate-50 p-3">${escapeHtml(req.body.raw || '')}</pre>`);
+    }
     if (elements.payloadTools) elements.payloadTools.classList.add('hidden');
   }
 

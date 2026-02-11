@@ -16,7 +16,8 @@ export const state = {
   sessionEditId: null,
   tabsCache: [],
   sites: [],
-  allowlistServiceSearch: ''
+  allowlistServiceSearch: '',
+  requestCapNotified: {}
 };
 
 export const elements = {

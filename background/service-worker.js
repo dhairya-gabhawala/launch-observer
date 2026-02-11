@@ -15,7 +15,7 @@ const DEFAULT_ALLOWLIST = [
 const DEFAULT_SETTINGS = {
   allowlist: DEFAULT_ALLOWLIST,
   capturePaused: false,
-  maxEntries: 500,
+  maxEntries: 2000,
   selectedSessionId: null,
   enableHooks: false,
   serviceMappings: []

@@ -262,6 +262,16 @@ api.runtime.onMessage.addListener(message => {
   if (!message || !message.type) return;
   if (message.type === 'requestAdded') {
     state.requests.push(message.request);
+    const maxEntries = state.settings?.maxEntries || 2000;
+    if (state.requests.length > maxEntries) {
+      const overflow = state.requests.length - maxEntries;
+      if (overflow > 0) state.requests.splice(0, overflow);
+      const sessionKey = message.request?.sessionId || 'global';
+      if (!state.requestCapNotified[sessionKey]) {
+        state.requestCapNotified[sessionKey] = true;
+        toast('Request limit reached', `Oldest requests were trimmed to keep ${maxEntries} entries.`);
+      }
+    }
     applySearch();
     renderSessions();
   }
