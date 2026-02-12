@@ -17,9 +17,12 @@ let pendingUatConfig = null;
 function updateSettings(patch) {
   if (!state.settings) return;
   const next = { ...state.settings, ...patch };
+  state.settings = next;
+  updateDebugBadge();
   api.runtime.sendMessage({ type: 'setSettings', settings: next }, response => {
     if (response?.settings) {
       state.settings = response.settings;
+      updateDebugBadge();
     }
   });
 }
@@ -44,6 +47,7 @@ function refreshState() {
       elements.emptyState.classList.add('hidden');
     }
     updateDebugBadge();
+    updateSessionExpiredBanner();
     updateSessionSummary();
   });
 }
@@ -278,15 +282,69 @@ if (elements.uatCloseDrawer) {
 function renderUatAssertionsDrawer(site, config) {
   if (!elements.uatAssertionsBody) return;
   const assertions = config?.assertions || [];
+  const globalConfig = config?.global || null;
   if (!site) {
     setHTML(elements.uatAssertionsBody, '<div class="text-sm text-slate-500">Select a site to view assertions.</div>');
     return;
   }
-  if (!assertions.length) {
+  if (!assertions.length && !globalConfig) {
     setHTML(elements.uatAssertionsBody, '<div class="text-sm text-slate-500">No assertions imported for this site yet.</div>');
     return;
   }
-  setHTML(elements.uatAssertionsBody, assertions.map(item => {
+  const renderList = (list) => list.map(cond => {
+    const source = escapeHtml(cond.source || 'payload');
+    const path = escapeHtml(cond.path || '');
+    const operator = escapeHtml(cond.operator || 'exists');
+    const expected = cond.expected !== undefined ? `<span class="text-slate-500">"${escapeHtml(String(cond.expected))}"</span>` : '';
+    return `
+      <div class="rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700">
+        <div><span class="font-semibold">${source}</span> · <span class="text-slate-500">${path || 'raw'}</span></div>
+        <div class="text-slate-600">${operator}${expected ? ` · ${expected}` : ''}</div>
+      </div>
+    `;
+  }).join('');
+
+  const globalBlock = (() => {
+    if (!globalConfig) return '';
+    const includeServices = Array.isArray(globalConfig.includeServices) ? globalConfig.includeServices : [];
+    const excludeServices = Array.isArray(globalConfig.excludeServices) ? globalConfig.excludeServices : [];
+    const includeConditions = Array.isArray(globalConfig.includeConditions) ? globalConfig.includeConditions : [];
+    const excludeConditions = Array.isArray(globalConfig.excludeConditions) ? globalConfig.excludeConditions : [];
+    const serviceChips = [
+      ...includeServices.map(id => ({
+        id,
+        classes: 'rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700'
+      })),
+      ...excludeServices.map(id => ({
+        id,
+        classes: 'rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700'
+      }))
+    ].map(item => `<span class="${item.classes}">${escapeHtml(item.id)}</span>`).join('');
+    const includeBlock = includeConditions.length
+      ? `<div class="mt-3">
+          <div class="text-[10px] uppercase tracking-wide text-slate-400 mb-2">Include when (all)</div>
+          <div class="space-y-2">${renderList(includeConditions)}</div>
+        </div>`
+      : '';
+    const excludeBlock = excludeConditions.length
+      ? `<div class="mt-3">
+          <div class="text-[10px] uppercase tracking-wide text-slate-400 mb-2">Exclude when (any)</div>
+          <div class="space-y-2">${renderList(excludeConditions)}</div>
+        </div>`
+      : '';
+    return `
+      <div class="rounded border border-slate-200 bg-white p-3 mb-3">
+        <div class="flex items-center justify-between text-sm font-semibold text-slate-800">
+          <span>Global gates</span>
+        </div>
+        ${serviceChips ? `<div class="mt-2 flex flex-wrap gap-2">${serviceChips}</div>` : ''}
+        ${includeBlock}
+        ${excludeBlock}
+      </div>
+    `;
+  })();
+
+  setHTML(elements.uatAssertionsBody, `${globalBlock}${assertions.map(item => {
     const title = item.title || item.id || 'Assertion';
     const description = item.description ? `<div class="mt-1 text-xs text-slate-500">${escapeHtml(item.description)}</div>` : '';
     const scope = item.scope ? `<span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">${escapeHtml(item.scope)}</span>` : '';
@@ -295,18 +353,6 @@ function renderUatAssertionsDrawer(site, config) {
     const count = item.count && item.value !== undefined
       ? `<div class="mt-2 text-xs text-slate-600"><span class="font-semibold text-slate-700">Count</span> <span class="text-slate-400">•</span> ${escapeHtml(item.count)} = ${escapeHtml(String(item.value))}</div>`
       : '';
-    const renderList = (list) => list.map(cond => {
-      const source = escapeHtml(cond.source || 'payload');
-      const path = escapeHtml(cond.path || '');
-      const operator = escapeHtml(cond.operator || 'exists');
-      const expected = cond.expected !== undefined ? `<span class="text-slate-500">"${escapeHtml(String(cond.expected))}"</span>` : '';
-      return `
-        <div class="rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700">
-          <div><span class="font-semibold">${source}</span> · <span class="text-slate-500">${path || 'raw'}</span></div>
-          <div class="text-slate-600">${operator}${expected ? ` · ${expected}` : ''}</div>
-        </div>
-      `;
-    }).join('');
     const conditions = Array.isArray(item.conditions) && item.conditions.length
       ? `<div class="mt-3">
           <div class="text-[10px] uppercase tracking-wide text-slate-400 mb-2">Applies when</div>
@@ -336,7 +382,7 @@ function renderUatAssertionsDrawer(site, config) {
         </div>
       </details>
     `;
-  }).join(''));
+  }).join('')}`);
 }
 
 /**
@@ -609,6 +655,24 @@ if (elements.confirmOk) {
   });
 }
 
+if (elements.sessionIdleExtend) {
+  elements.sessionIdleExtend.addEventListener('click', () => {
+    api.runtime.sendMessage({ type: 'idleExtend' }, () => {
+      elements.sessionIdleDialog?.close();
+      toast('Session extended');
+    });
+  });
+}
+
+if (elements.sessionIdleStop) {
+  elements.sessionIdleStop.addEventListener('click', () => {
+    api.runtime.sendMessage({ type: 'idleStop' }, () => {
+      elements.sessionIdleDialog?.close();
+      toast('Session stopped');
+    });
+  });
+}
+
 if (elements.openHelp) {
   elements.openHelp.addEventListener('click', () => {
     elements.helpDialog?.showModal();
@@ -719,9 +783,36 @@ api.runtime.onMessage.addListener(message => {
   if (message.type === 'sessionsUpdated') {
     state.sessions = message.sessions || [];
     state.currentSessionId = message.currentSessionId || null;
+    if (state.settings?.selectedSessionId && !state.settings?.capturePaused) {
+      state.sessionStopReason = null;
+    }
     renderSessions();
     applySearch();
     updateSessionSummary();
+    updateSessionExpiredBanner();
+  }
+  if (message.type === 'sessionIdle') {
+    elements.sessionIdleDialog?.showModal();
+  }
+  if (message.type === 'sessionStopped') {
+    const stoppedId = message.sessionId;
+    if (stoppedId) {
+      const session = state.sessions.find(s => s.id === stoppedId);
+      if (session) session.paused = true;
+    }
+    if (state.settings) {
+      state.settings.selectedSessionId = null;
+      state.settings.capturePaused = true;
+    }
+    state.currentSessionId = null;
+    state.sessionStopReason = message.reason || 'idle';
+    elements.details.classList.add('hidden');
+    elements.observingState.classList.add('hidden');
+    elements.emptyState.classList.remove('hidden');
+    renderSessions();
+    applySearch();
+    updateSessionSummary();
+    updateSessionExpiredBanner();
   }
   if (message.type === 'sitesUpdated') {
     state.sites = message.sites || [];
@@ -783,5 +874,17 @@ function updateDebugBadge() {
     elements.debugModeBadge.classList.remove('hidden');
   } else {
     elements.debugModeBadge.classList.add('hidden');
+  }
+}
+
+/**
+ * Toggle the session expired banner after idle stop.
+ */
+function updateSessionExpiredBanner() {
+  if (!elements.sessionExpiredBanner) return;
+  if (state.sessionStopReason === 'idle') {
+    elements.sessionExpiredBanner.classList.remove('hidden');
+  } else {
+    elements.sessionExpiredBanner.classList.add('hidden');
   }
 }

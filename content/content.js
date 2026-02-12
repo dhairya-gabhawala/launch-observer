@@ -50,6 +50,25 @@ window.addEventListener('message', event => {
       pageUrl: event.data.pageUrl || ''
     });
   }
+  if (event.data.type === 'hookReady') {
+    api.runtime.sendMessage({ type: 'hookReady' });
+  }
+  if (event.data.type === 'hookCall') {
+    api.runtime.sendMessage({
+      type: 'hookCall',
+      kind: event.data.kind || '',
+      url: event.data.url || ''
+    });
+  }
+  if (event.data.type === 'capturedWebsdk') {
+    api.runtime.sendMessage({
+      type: 'capturedWebsdk',
+      payload: event.data.payload,
+      hookId: event.data.hookId || '',
+      hookTs: event.data.hookTs || 0,
+      pageUrl: event.data.pageUrl || ''
+    });
+  }
   if (event.data.type === 'pageContext') {
     api.runtime.sendMessage({
       type: 'pageContext',

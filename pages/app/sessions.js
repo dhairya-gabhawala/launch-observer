@@ -162,7 +162,7 @@ export function buildSiteOptions() {
 /**
  * Populate lock-tab selector options.
  */
-export function populateTabOptions() {
+export function populateTabOptions(preferredTabId) {
   if (!elements.sessionLockTab) return;
   api.tabs.query({}, tabs => {
     const filtered = tabs.filter(tab => !isExtensionTab(tab));
@@ -174,6 +174,11 @@ export function populateTabOptions() {
     setHTML(elements.sessionLockTab, options.map(opt => {
       return `<option value="${opt.id}">${escapeHtml(opt.label)}</option>`;
     }).join(''));
+    if (preferredTabId !== null && preferredTabId !== undefined) {
+      elements.sessionLockTab.value = String(preferredTabId);
+    } else if (elements.sessionLockTab.options.length) {
+      elements.sessionLockTab.selectedIndex = 0;
+    }
   });
 }
 
@@ -214,7 +219,7 @@ export function getSelectedSite() {
  */
 export function openSessionDialog(session) {
   buildSiteOptions();
-  populateTabOptions();
+  populateTabOptions(session?.lockTabId);
   elements.sessionSiteInput.classList.add('hidden');
   elements.sessionSiteError.classList.add('hidden');
   if (elements.sessionTabError) elements.sessionTabError.classList.add('hidden');
@@ -232,11 +237,6 @@ export function openSessionDialog(session) {
       elements.sessionSiteInput.classList.remove('hidden');
       elements.sessionSiteInput.value = session.site;
     }
-  }
-  if (session?.lockTabId !== null && session?.lockTabId !== undefined) {
-    elements.sessionLockTab.value = String(session.lockTabId);
-  } else if (elements.sessionLockTab.options.length) {
-    elements.sessionLockTab.selectedIndex = 0;
   }
   if (elements.sessionUatToggle) {
     elements.sessionUatToggle.checked = !!session?.uatEnabled;

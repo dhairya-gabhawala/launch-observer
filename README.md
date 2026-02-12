@@ -75,12 +75,14 @@ Background and content scripts:
   - `LaunchObserverDebug.enableHookLogging(true)`
   - `LaunchObserverDebug.disableHookLogging()`
   - `LaunchObserverDebug.isHookLoggingEnabled()`
+- Sessions will prompt to end after 5 minutes of inactivity (no captured requests).
 
 ## UAT Assertions
 - Import one JSON file per site via the **UAT Assertions** dialog.
 - Enable **Perform UAT validations** when starting a session.
 - Use **See Assertions** to view and download the current assertion config.
 - UAT results appear in request details and in the session UAT report.
+ - WebSDK payloads are captured via page hooks (when enabled) to cover requests sent outside the page context.
 
 ### UAT Schema Notes
 - `siteId` (required): string identifier for the site.
@@ -105,6 +107,25 @@ Background and content scripts:
 - `condition.path` (required unless `source=raw`): string path.
 - `condition.operator` (required): string operator.
 - `condition.expected` (required for comparison operators): string, number, or array.
+
+### Service Catalog (IDs)
+- `adobe-edge` — Adobe Edge
+- `adobe-analytics` — Adobe Analytics
+- `google-analytics` — Google Analytics
+- `google-ads` — Google Ads
+- `meta` — Meta Pixel
+- `tiktok` — TikTok Pixel
+- `linkedin` — LinkedIn Insight
+- `pinterest` — Pinterest Tag
+- `snapchat` — Snapchat Pixel
+- `x` — X Ads
+- `microsoft-ads` — Microsoft Ads (Bing)
+- `baidu` — Baidu Tongji
+- `demandbase` — Demandbase
+- `hotjar` — Hotjar
+- `segment` — Segment
+- `mixpanel` — Mixpanel
+- `amplitude` — Amplitude
 
 ## Documentation Site
 The GitHub Pages site lives in `docs/` with the landing page at `docs/index.html`

@@ -7,7 +7,10 @@
   let hookCounter = 0;
   const pendingPayloads = [];
   const pendingPageContext = [];
+  const pendingWebsdk = [];
   const MAX_PENDING = 50;
+  let hookReadySent = false;
+  let alloyWrapped = false;
 
   /**
    * Check URL against the allowlist.
@@ -59,6 +62,11 @@
     pendingPageContext.push({ url });
   }
 
+  function enqueueWebsdk(payload) {
+    if (pendingWebsdk.length >= MAX_PENDING) pendingWebsdk.shift();
+    pendingWebsdk.push(payload);
+  }
+
   function flushPending() {
     if (!allowlistReady || !enableHooks) return;
     pendingPayloads.splice(0).forEach(item => {
@@ -66,6 +74,9 @@
     });
     pendingPageContext.splice(0).forEach(item => {
       postPageContext(item.url);
+    });
+    pendingWebsdk.splice(0).forEach(payload => {
+      postWebsdkPayload(payload);
     });
   }
 
@@ -111,6 +122,75 @@
       hookTs: Date.now(),
       pageUrl: window.location.href
     }, '*');
+  }
+
+  function postWebsdkPayload(payload) {
+    if (!enableHooks) {
+      if (!allowlistReady) enqueueWebsdk(payload);
+      return;
+    }
+    let raw = '';
+    try {
+      raw = JSON.stringify(payload || {});
+    } catch {
+      raw = '';
+    }
+    const parsed = tryParseJson(raw) || (payload && typeof payload === 'object' ? payload : null);
+    const hookId = `${Date.now()}-${hookCounter++}`;
+    window.postMessage({
+      source: 'launch-observer-page',
+      type: 'capturedWebsdk',
+      payload: {
+        type: 'json',
+        contentType: 'application/json',
+        raw,
+        parsed
+      },
+      hookId,
+      hookTs: Date.now(),
+      pageUrl: window.location.href
+    }, '*');
+  }
+
+  function postHookReady() {
+    if (hookReadySent) return;
+    hookReadySent = true;
+    window.postMessage({ source: 'launch-observer-page', type: 'hookReady' }, '*');
+  }
+
+  function postHookCall(kind, url) {
+    if (!enableHooks && allowlistReady) return;
+    window.postMessage({
+      source: 'launch-observer-page',
+      type: 'hookCall',
+      kind,
+      url
+    }, '*');
+  }
+
+  function wrapAlloy() {
+    if (alloyWrapped) return;
+    const original = window.alloy;
+    if (typeof original !== 'function') return;
+    if (original.__launchObserverWrapped) {
+      alloyWrapped = true;
+      return;
+    }
+    const wrapped = function(...args) {
+      try {
+        const command = args[0];
+        if (command === 'sendEvent' && args[1] && typeof args[1] === 'object') {
+          postWebsdkPayload(args[1]);
+        }
+      } catch {}
+      return original.apply(this, args);
+    };
+    wrapped.__launchObserverWrapped = true;
+    try {
+      Object.defineProperty(wrapped, 'name', { value: 'alloy', configurable: true });
+    } catch {}
+    window.alloy = wrapped;
+    alloyWrapped = true;
   }
 
   /**
@@ -173,6 +253,7 @@
     try {
       const request = input instanceof Request ? input : null;
       const url = request ? request.url : String(input);
+      postHookCall('fetch', url);
       const initHeaders = init && init.headers ? init.headers : null;
       const headerLookup = headerObj => {
         if (!headerObj) return '';
@@ -219,6 +300,7 @@
   if (originalSendBeacon) {
     navigator.sendBeacon = function(url, data) {
       try {
+        postHookCall('beacon', url);
         bodyToText(data).then(text => {
           if (text) {
             postPayload(url, text, '');
@@ -248,6 +330,7 @@
   XMLHttpRequest.prototype.send = function(body) {
     try {
       if (this.__lo_url && body) {
+        postHookCall('xhr', this.__lo_url);
         bodyToText(body).then(text => {
           const contentType = this.__lo_headers?.['content-type'] || '';
           if (text) {
@@ -257,6 +340,7 @@
           }
         });
       } else if (this.__lo_url) {
+        postHookCall('xhr', this.__lo_url);
         postPageContext(this.__lo_url);
       }
     } catch {}
@@ -272,4 +356,19 @@
   });
 
   window.postMessage({ source: 'launch-observer-page', type: 'requestAllowlist' }, '*');
+  postHookReady();
+  wrapAlloy();
+
+  let alloyChecks = 0;
+  const alloyTimer = setInterval(() => {
+    if (alloyWrapped) {
+      clearInterval(alloyTimer);
+      return;
+    }
+    wrapAlloy();
+    alloyChecks += 1;
+    if (alloyChecks > 40) {
+      clearInterval(alloyTimer);
+    }
+  }, 500);
 })();

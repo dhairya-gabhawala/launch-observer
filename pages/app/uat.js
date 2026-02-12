@@ -18,7 +18,7 @@ export function renderUatForRequest(req) {
     const session = state.sessions.find(s => s.id === state.settings?.selectedSessionId);
     const hasConfig = session?.site && state.uatConfigs?.[session.site];
     if (session?.uatEnabled && hasConfig) {
-      setStatusLine('loading', 'UAT validation in progress');
+      setStatusLine('skipped', 'UAT skipped');
     } else {
       setStatusLine('idle', 'UAT not enabled for this session.');
     }
@@ -29,12 +29,12 @@ export function renderUatForRequest(req) {
     return;
   }
   if (!uat.results || !uat.results.length) {
-    setStatusLine('idle', 'UAT not applicable for this request.');
+    setStatusLine('skipped', 'UAT skipped');
     return;
   }
   const applicableResults = uat.results.filter(r => r.applicable !== false);
   if (!applicableResults.length) {
-    setStatusLine('idle', 'UAT not applicable for this request.');
+    setStatusLine('skipped', 'UAT skipped');
     if (elements.uatOpenDrawer) {
       elements.uatOpenDrawer.classList.remove('hidden');
       elements.uatOpenDrawer.onclick = () => openUatDrawer(req);
@@ -83,6 +83,13 @@ function setStatusLine(state, label) {
       </svg>
     `;
     toneClass = 'text-rose-700';
+  } else if (state === 'skipped') {
+    icon = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="h-4 w-4 text-slate-500">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636" />
+      </svg>
+    `;
+    toneClass = 'text-slate-500';
   } else {
     icon = `
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="h-4 w-4 text-slate-400">
@@ -239,14 +246,14 @@ function renderUatDrawerItem(result) {
       <div class="rounded border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
         <div class="flex items-start justify-between gap-2">
           <div class="min-w-0">
-            <div class="truncate font-semibold text-slate-700">${escapeHtml(cond.path || '(root)')}</div>
+            <div class="break-words font-semibold text-slate-700">${escapeHtml(cond.path || '(root)')}</div>
             <div class="text-[10px] uppercase tracking-wide text-slate-400">${escapeHtml(cond.source || 'payload')}</div>
           </div>
           <span class="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">${escapeHtml(cond.operator)}</span>
         </div>
         <div class="mt-2 grid grid-cols-1 gap-1">
-          <div><span class="font-semibold text-slate-700">Expected</span> <span class="text-slate-500">•</span> ${escapeHtml(expected)}</div>
-          <div><span class="font-semibold text-slate-700">Actual</span> <span class="text-slate-500">•</span> ${escapeHtml(actual)}</div>
+          <div class="break-words"><span class="font-semibold text-slate-700">Expected</span> <span class="text-slate-500">•</span> ${escapeHtml(expected)}</div>
+          <div class="break-words"><span class="font-semibold text-slate-700">Actual</span> <span class="text-slate-500">•</span> ${escapeHtml(actual)}</div>
         </div>
       </div>
     `;
@@ -261,13 +268,13 @@ function renderUatDrawerItem(result) {
                <div class="rounded border border-slate-200 bg-white px-2 py-1.5">
                  <div class="flex items-start justify-between gap-2">
                    <div class="min-w-0">
-                     <div class="truncate font-semibold text-slate-700">${escapeHtml(cond.path || '(root)')}</div>
+                     <div class="break-words font-semibold text-slate-700">${escapeHtml(cond.path || '(root)')}</div>
                      <div class="text-[10px] uppercase tracking-wide text-slate-400">${escapeHtml(cond.source || 'payload')}</div>
                    </div>
                    <span class="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">${escapeHtml(cond.operator || 'exists')}</span>
                  </div>
                  <div class="mt-2 grid grid-cols-1 gap-1">
-                   <div><span class="font-semibold text-slate-700">Expected</span> <span class="text-slate-500">•</span> ${expected}</div>
+                   <div class="break-words"><span class="font-semibold text-slate-700">Expected</span> <span class="text-slate-500">•</span> ${expected}</div>
                  </div>
                </div>
              `;
@@ -287,7 +294,7 @@ function renderUatDrawerItem(result) {
     <details class="rounded border border-slate-200 bg-white p-3 group">
       <summary class="cursor-pointer text-sm font-semibold text-slate-800 flex items-start justify-between gap-2">
         <div class="w-[80%] pr-2 min-w-0">
-          <div class="truncate">${escapeHtml(result.title)}</div>
+          <div class="break-words">${escapeHtml(result.title)}</div>
           ${result.description ? `<div class="text-xs font-normal text-slate-500 mt-1">${escapeHtml(result.description)}</div>` : ''}
         </div>
         <span class="w-6 flex-shrink-0 text-right">

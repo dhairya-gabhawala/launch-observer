@@ -36,6 +36,11 @@ const payloadCacheByUrlTab = new Map();
 let uatConfigs = {};
 const hookQueueByTabUrl = new Map();
 const hookQueueByUrl = new Map();
+let lastRequestAt = Date.now();
+let idlePrompted = false;
+
+const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+const IDLE_CHECK_ALARM = 'idle-check';
 
 function debugHookLog(...args) {
   if (!settings?.debugHooks) return;
@@ -99,7 +104,7 @@ async function injectPageHooks(tabId, url = '', reason = '') {
  * @returns {Promise<void>}
  */
 async function loadState() {
-  const stored = await api.storage.local.get(['settings', 'requests', 'sessions', 'sites', 'currentSessionId', 'uatConfigs']);
+  const stored = await api.storage.local.get(['settings', 'requests', 'sessions', 'sites', 'currentSessionId', 'uatConfigs', 'lastRequestAt', 'idlePrompted']);
   if (stored.settings) settings = { ...DEFAULT_SETTINGS, ...stored.settings };
   if (Array.isArray(stored.requests)) {
     requests = stored.requests;
@@ -111,6 +116,8 @@ async function loadState() {
   if (stored.uatConfigs && typeof stored.uatConfigs === 'object') {
     uatConfigs = Object.fromEntries(Object.entries(stored.uatConfigs).map(([key, value]) => [key, normalizeUatConfig(value)]));
   }
+  if (stored.lastRequestAt) lastRequestAt = stored.lastRequestAt;
+  if (stored.idlePrompted !== undefined) idlePrompted = !!stored.idlePrompted;
   if (!currentSessionId) currentSessionId = sessions[0]?.id || null;
   if (!settings.selectedSessionId) settings.selectedSessionId = currentSessionId;
 }
@@ -120,7 +127,7 @@ async function loadState() {
  * @returns {Promise<void>}
  */
 function saveState() {
-  return api.storage.local.set({ settings, requests, sessions, sites, currentSessionId, uatConfigs });
+  return api.storage.local.set({ settings, requests, sessions, sites, currentSessionId, uatConfigs, lastRequestAt, idlePrompted });
 }
 
 /**
@@ -206,6 +213,8 @@ function addRequest(details) {
   }
   requests.push(entry);
   requestIndex.set(details.requestId, entry);
+  lastRequestAt = Date.now();
+  idlePrompted = false;
   trimRequests();
   saveState();
   api.runtime.sendMessage({ type: 'requestAdded', request: entry });
@@ -221,6 +230,48 @@ function updateRequest(requestId, patch) {
   if (!entry) return;
   Object.assign(entry, patch);
   if (!entry.pageUrl && entry.body) {
+    entry.pageUrl = extractPageUrlFromPayload(entry.body) || entry.pageUrl;
+  }
+  evaluateUatForRequest(entry);
+  saveState();
+  api.runtime.sendMessage({ type: 'requestUpdated', request: entry });
+}
+
+/**
+ * Check whether a request entry looks like WebSDK.
+ * @param {object} entry
+ * @returns {boolean}
+ */
+function isWebsdkRequest(entry) {
+  if (!entry) return false;
+  const params = entry.query?.params || [];
+  return params.some(param => String(param.key).toLowerCase() === 'configid');
+}
+
+/**
+ * Attach a WebSDK hook payload to the most recent matching request.
+ * @param {number} tabId
+ * @param {object} payload
+ * @param {string} pageUrl
+ * @param {number} hookTs
+ */
+function attachWebsdkPayloadToRecent(tabId, payload, pageUrl, hookTs) {
+  if (!payload) return;
+  const now = Date.now();
+  const candidates = requests.filter(entry => entry.tabId === tabId && isWebsdkRequest(entry));
+  if (!candidates.length) return;
+  const filtered = candidates.filter(entry => Math.abs((hookTs || now) - (entry.timeStamp || now)) < 20000);
+  if (!filtered.length) return;
+  const entry = filtered.reduce((best, item) => {
+    if (!best) return item;
+    return (item.timeStamp || 0) > (best.timeStamp || 0) ? item : best;
+  }, null);
+  if (!entry) return;
+  if (!shouldReplaceBody(entry.body, payload)) return;
+  debugHookLog('attach: websdk recent', { tabId, id: entry.id, hookTs });
+  entry.body = payload;
+  if ((!entry.pageUrl || entry.pageUrl === '/') && pageUrl) entry.pageUrl = pageUrl;
+  if ((!entry.pageUrl || entry.pageUrl === '/') && entry.body) {
     entry.pageUrl = extractPageUrlFromPayload(entry.body) || entry.pageUrl;
   }
   evaluateUatForRequest(entry);
@@ -259,12 +310,46 @@ function evaluateUatForRequest(entry) {
   };
 }
 
+/**
+ * Stop the active session due to idle timeout.
+ * @param {string} [reason='idle']
+ */
+function stopActiveSession(reason = 'idle') {
+  const sessionId = settings.selectedSessionId || currentSessionId;
+  if (!sessionId) return;
+  const session = sessions.find(s => s.id === sessionId);
+  if (session) session.paused = true;
+  settings.selectedSessionId = null;
+  currentSessionId = null;
+  settings.capturePaused = true;
+  idlePrompted = false;
+  saveState();
+  api.runtime.sendMessage({ type: 'sessionsUpdated', sessions, currentSessionId });
+  api.runtime.sendMessage({ type: 'settingsUpdated', settings });
+  api.runtime.sendMessage({ type: 'sessionStopped', reason, sessionId });
+}
+
+/**
+ * Trigger idle modal if no requests were captured recently.
+ */
+function checkForIdleSession() {
+  if (settings.capturePaused) return;
+  const sessionId = settings.selectedSessionId || currentSessionId;
+  if (!sessionId) return;
+  if (idlePrompted) return;
+  if (Date.now() - lastRequestAt < IDLE_TIMEOUT_MS) return;
+  idlePrompted = true;
+  saveState();
+  api.runtime.sendMessage({ type: 'sessionIdle', sessionId });
+}
+
 api.runtime.onInstalled?.addListener(() => {
   loadState();
 });
 
 api.runtime.onStartup?.addListener(() => {
   loadState();
+  api.alarms?.create?.(IDLE_CHECK_ALARM, { periodInMinutes: 1 });
 });
 
 action?.onClicked.addListener(async () => {
@@ -285,13 +370,7 @@ async function endActiveSessionIfClosed() {
   const url = api.runtime.getURL('pages/app.html');
   const tabs = await api.tabs.query({ url });
   if (tabs.length) return;
-  const session = sessions.find(s => s.id === settings.selectedSessionId);
-  if (session) session.paused = true;
-  settings.selectedSessionId = null;
-  currentSessionId = null;
-  settings.capturePaused = true;
-  await saveState();
-  api.runtime.sendMessage({ type: 'sessionsUpdated', sessions, currentSessionId });
+  stopActiveSession('ui-closed');
 }
 
 api.tabs.onRemoved.addListener(() => {
@@ -327,6 +406,18 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
     }
     sendResponse({ ok: true, settings });
+    return true;
+  }
+  if (message.type === 'idleExtend') {
+    lastRequestAt = Date.now();
+    idlePrompted = false;
+    saveState();
+    sendResponse({ ok: true });
+    return true;
+  }
+  if (message.type === 'idleStop') {
+    stopActiveSession('idle');
+    sendResponse({ ok: true });
     return true;
   }
   if (message.type === 'setUatConfig') {
@@ -371,12 +462,19 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
     }
     const name = (message.name || '').trim() || `Session ${sessions.length + 1}`;
+    const previousId = settings.selectedSessionId || currentSessionId;
+    if (previousId) {
+      const previous = sessions.find(s => s.id === previousId);
+      if (previous) previous.paused = true;
+    }
     const session = createSession(name, site, message.lockTabId || null, !!message.uatEnabled);
     sessions.unshift(session);
     if (!sites.includes(site)) sites.unshift(site);
     currentSessionId = session.id;
     settings.selectedSessionId = session.id;
     settings.capturePaused = false;
+    lastRequestAt = Date.now();
+    idlePrompted = false;
     saveState();
     api.runtime.sendMessage({ type: 'sessionsUpdated', sessions, currentSessionId });
     api.runtime.sendMessage({ type: 'settingsUpdated', settings });
@@ -438,6 +536,7 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
       currentSessionId = session.id;
       session.paused = true;
       settings.capturePaused = true;
+      idlePrompted = false;
       saveState();
       api.runtime.sendMessage({ type: 'sessionsUpdated', sessions, currentSessionId });
       api.runtime.sendMessage({ type: 'settingsUpdated', settings });
@@ -460,6 +559,7 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (currentSessionId === id) {
       currentSessionId = settings.selectedSessionId || null;
     }
+    idlePrompted = false;
     saveState();
     api.runtime.sendMessage({ type: 'sessionsUpdated', sessions, currentSessionId });
     sendResponse({ ok: true });
@@ -471,6 +571,7 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     requestIndex = new Map();
     currentSessionId = null;
     settings.selectedSessionId = null;
+    idlePrompted = false;
     saveState();
     api.runtime.sendMessage({ type: 'sessionsUpdated', sessions, currentSessionId });
     sendResponse({ ok: true });
@@ -485,6 +586,7 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     currentSessionId = null;
     settings.selectedSessionId = null;
     settings.capturePaused = true;
+    idlePrompted = false;
     saveState();
     api.runtime.sendMessage({ type: 'sessionsUpdated', sessions, currentSessionId });
     api.runtime.sendMessage({ type: 'sitesUpdated', sites });
@@ -494,6 +596,11 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   if (message.type === 'capturedPayload') {
     if (!message.payload) {
+      sendResponse({ ok: false });
+      return true;
+    }
+    if (settings.capturePaused || !settings.selectedSessionId) {
+      debugHookLog('drop: no active session', { url: message.url, requestId: message.requestId });
       sendResponse({ ok: false });
       return true;
     }
@@ -530,6 +637,11 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   if (message.type === 'pageContext') {
+    if (settings.capturePaused || !settings.selectedSessionId) {
+      debugHookLog('drop: no active session (pageContext)', { url: message.url, requestId: message.requestId });
+      sendResponse({ ok: false });
+      return true;
+    }
     if (!settings.enableHooks) {
       debugHookLog('drop: hooks disabled (pageContext)', { url: message.url, requestId: message.requestId });
       sendResponse({ ok: false });
@@ -554,6 +666,39 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.requestId) attachPageContextToRequests(message.requestId, message.pageUrl || '');
     if (message.url && sender?.tab?.id !== undefined) {
       attachPageContextToRequestsByUrl(sender.tab.id, message.url, message.pageUrl || '');
+    }
+    sendResponse({ ok: true });
+    return true;
+  }
+  if (message.type === 'hookReady') {
+    debugHookLog('hook: ready', { tabId: sender?.tab?.id });
+    sendResponse({ ok: true });
+    return true;
+  }
+  if (message.type === 'hookCall') {
+    debugHookLog('hook: call', { tabId: sender?.tab?.id, kind: message.kind, url: message.url });
+    sendResponse({ ok: true });
+    return true;
+  }
+  if (message.type === 'capturedWebsdk') {
+    if (!message.payload) {
+      sendResponse({ ok: false });
+      return true;
+    }
+    if (settings.capturePaused || !settings.selectedSessionId) {
+      debugHookLog('drop: no active session (websdk)', { tabId: sender?.tab?.id });
+      sendResponse({ ok: false });
+      return true;
+    }
+    if (!settings.enableHooks) {
+      debugHookLog('drop: hooks disabled (websdk)', { tabId: sender?.tab?.id });
+      sendResponse({ ok: false });
+      return true;
+    }
+    debugHookLog('capturedWebsdk', { tabId: sender?.tab?.id, hookTs: message.hookTs });
+    const tabId = sender?.tab?.id;
+    if (tabId !== undefined) {
+      attachWebsdkPayloadToRecent(tabId, message.payload, message.pageUrl || '', message.hookTs || 0);
     }
     sendResponse({ ok: true });
     return true;
@@ -613,6 +758,13 @@ api.webRequest.onBeforeRequest.addListener(
   { urls: ['<all_urls>'] },
   ['requestBody']
 );
+
+api.alarms?.onAlarm?.addListener(alarm => {
+  if (alarm?.name === IDLE_CHECK_ALARM) {
+    debugHookLog('idle-check', { lastRequestAt, idlePrompted });
+    checkForIdleSession();
+  }
+});
 
 api.webNavigation.onCommitted.addListener(details => {
   if (details.frameId !== 0) return;
@@ -1102,6 +1254,7 @@ api.webRequest.onErrorOccurred.addListener(
 );
 
 loadState();
+api.alarms?.create?.(IDLE_CHECK_ALARM, { periodInMinutes: 1 });
 
 /**
  * Create a new session object.

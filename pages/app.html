@@ -100,6 +100,9 @@
             <span id="request-count">0 requests</span>
             <span id="session-summary" class="text-slate-500"></span>
           </div>
+          <div id="session-expired-banner" class="mt-2 hidden rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-700">
+            Session expired due to inactivity.
+          </div>
         </div>
         <div class="flex-1 overflow-hidden">
           <div class="h-full grid grid-cols-12">
@@ -287,6 +290,17 @@
     </form>
   </dialog>
 
+  <dialog id="session-idle-dialog" class="rounded-lg p-0 w-[420px]">
+    <form method="dialog" class="p-6 space-y-4">
+      <div class="text-lg font-semibold">Session idle</div>
+      <div class="text-sm text-slate-600">No requests were captured in the last 5 minutes. Do you want to extend the session or stop it now?</div>
+      <div class="flex justify-end gap-2">
+        <button id="session-idle-extend" class="px-3 py-2 border rounded" type="button">Extend</button>
+        <button id="session-idle-stop" class="px-3 py-2 bg-slate-900 text-white rounded" type="button">Stop session</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="uat-dialog" class="rounded-lg p-0 w-[560px]">
     <form method="dialog" class="p-6 space-y-4">
       <div class="text-lg font-semibold">UAT Assertions</div>
@@ -387,6 +401,13 @@
                   <div><span class="font-semibold">Requests:</span> The network calls sent by the page.</div>
                   <div><span class="font-semibold">Payload:</span> The data inside a request, shown in a readable format.</div>
                   <div><span class="font-semibold">UAT assertions:</span> Rules that validate your analytics data.</div>
+                </div>
+              </div>
+              <div class="mt-3 text-slate-600">
+                <div class="font-semibold text-slate-900 mb-2">WebSDK payload capture</div>
+                <div class="text-slate-600">
+                  When payload capture via page hooks is enabled, Launch Observer can capture WebSDK payloads
+                  even when requests are sent outside the page context.
                 </div>
               </div>
               <div class="mt-4 rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
@@ -498,6 +519,28 @@
                   <li><span class="font-semibold">condition.path</span> (required unless source=raw): string path.</li>
                   <li><span class="font-semibold">condition.operator</span> (required): string operator.</li>
                   <li><span class="font-semibold">condition.expected</span> (required for comparison operators): string, number, or array.</li>
+                </ul>
+              </div>
+              <div class="mt-4 text-slate-600">
+                <div class="font-semibold text-slate-900 mb-2">Service catalog (IDs)</div>
+                <ul class="list-disc pl-5 space-y-1">
+                  <li><span class="font-semibold">adobe-edge</span> — Adobe Edge</li>
+                  <li><span class="font-semibold">adobe-analytics</span> — Adobe Analytics</li>
+                  <li><span class="font-semibold">google-analytics</span> — Google Analytics</li>
+                  <li><span class="font-semibold">google-ads</span> — Google Ads</li>
+                  <li><span class="font-semibold">meta</span> — Meta Pixel</li>
+                  <li><span class="font-semibold">tiktok</span> — TikTok Pixel</li>
+                  <li><span class="font-semibold">linkedin</span> — LinkedIn Insight</li>
+                  <li><span class="font-semibold">pinterest</span> — Pinterest Tag</li>
+                  <li><span class="font-semibold">snapchat</span> — Snapchat Pixel</li>
+                  <li><span class="font-semibold">x</span> — X Ads</li>
+                  <li><span class="font-semibold">microsoft-ads</span> — Microsoft Ads (Bing)</li>
+                  <li><span class="font-semibold">baidu</span> — Baidu Tongji</li>
+                  <li><span class="font-semibold">demandbase</span> — Demandbase</li>
+                  <li><span class="font-semibold">hotjar</span> — Hotjar</li>
+                  <li><span class="font-semibold">segment</span> — Segment</li>
+                  <li><span class="font-semibold">mixpanel</span> — Mixpanel</li>
+                  <li><span class="font-semibold">amplitude</span> — Amplitude</li>
                 </ul>
               </div>
               <div class="mt-3 rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">

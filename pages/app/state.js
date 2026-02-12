@@ -18,7 +18,8 @@ export const state = {
   sites: [],
   allowlistServiceSearch: '',
   requestCapNotified: {},
-  uatConfigs: {}
+  uatConfigs: {},
+  sessionStopReason: null
 };
 
 export const elements = {
@@ -28,6 +29,7 @@ export const elements = {
   mobileOverlay: document.getElementById('mobile-sidebar-overlay'),
   requestList: document.getElementById('request-list'),
   requestCount: document.getElementById('request-count'),
+  sessionExpiredBanner: document.getElementById('session-expired-banner'),
   search: document.getElementById('search'),
   sessionList: document.getElementById('session-list'),
   newSession: document.getElementById('new-session'),
@@ -75,6 +77,9 @@ export const elements = {
   confirmOk: document.getElementById('confirm-ok'),
   confirmTitle: document.getElementById('confirm-title'),
   confirmBody: document.getElementById('confirm-body'),
+  sessionIdleDialog: document.getElementById('session-idle-dialog'),
+  sessionIdleExtend: document.getElementById('session-idle-extend'),
+  sessionIdleStop: document.getElementById('session-idle-stop'),
   openHelp: document.getElementById('open-help'),
   helpDialog: document.getElementById('help-dialog'),
   helpClose: document.getElementById('help-close'),

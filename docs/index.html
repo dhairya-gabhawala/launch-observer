@@ -576,6 +576,10 @@
           <p>Import per-site validation rules, see pass/fail badges on requests, and export a shareable UAT report.</p>
         </div>
         <div class="feature-card">
+          <h3>WebSDK payload capture</h3>
+          <p>When page hooks are enabled, WebSDK payloads are captured even if requests fire outside the page context.</p>
+        </div>
+        <div class="feature-card">
           <h3>Assertions viewer</h3>
           <p>Inspect the live assertion configuration for any site and download the JSON for review or reuse.</p>
         </div>
@@ -616,6 +620,7 @@
     <section id="uat" class="section">
       <h2 class="section-title">UAT assertions, explained</h2>
       <p class="section-sub">UAT assertions are JSON rules that verify your analytics data. Each assertion includes one or more conditions and optional page-level count checks, plus optional global gates to include or exclude services.</p>
+      <p class="section-sub">Service IDs include: adobe-edge, adobe-analytics, google-analytics, google-ads, meta, tiktok, linkedin, pinterest, snapchat, x, microsoft-ads, baidu, demandbase, hotjar, segment, mixpanel, amplitude.</p>
       <div class="feature-grid">
         <div class="feature-card">
           <h3>Per-site configs</h3>
