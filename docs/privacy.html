@@ -80,7 +80,7 @@
   <main class="page">
     <div class="card">
       <h1>Launch Observer Privacy Policy</h1>
-      <div class="meta">Last updated: February 10, 2026</div>
+      <div class="meta">Last updated: February 12, 2026</div>
 
       <p>Launch Observer is a browser extension that helps users inspect analytics and marketing network calls. This policy explains what data the extension handles and how it is used.</p>
 
@@ -91,8 +91,12 @@
       <p>To provide the product features, the extension processes the following data only on your device:</p>
       <ul>
         <li>Network request metadata and payloads for domains you explicitly allow.</li>
+        <li>Optional page-level hook data to capture missing request bodies (only while a session is active).</li>
         <li>Session names, site labels, and request history stored in browser local storage.</li>
       </ul>
+
+      <h2>When Data Is Captured</h2>
+      <p>Launch Observer only inspects requests while a session is active and only for domains you explicitly allow. If no session is running, the extension does not capture request data.</p>
 
       <h2>Data Sharing</h2>
       <p>No data is sent to external servers. The extension operates entirely offline after installation.</p>

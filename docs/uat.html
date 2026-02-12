@@ -257,18 +257,48 @@
         </div>
         <div class="card">
           <h3>Optional keys</h3>
-          <p><strong>siteName</strong> (string), per-assertion <strong>title</strong> and <strong>description</strong></p>
+          <p><strong>siteName</strong> (string), <strong>global</strong> gates, per-assertion <strong>title</strong> and <strong>description</strong></p>
         </div>
+      </div>
+      <div class="card" style="margin-top:16px;">
+        <h3>Global gates (optional)</h3>
+        <p>Use <strong>global</strong> to include or exclude UAT by <strong>service ID</strong> and payload-based conditions.</p>
+        <ul>
+          <li><strong>includeServices</strong>: only run UAT for these services.</li>
+          <li><strong>excludeServices</strong>: never run UAT for these services.</li>
+          <li><strong>includeConditions</strong>: all must pass to run UAT.</li>
+          <li><strong>excludeConditions</strong>: any match skips UAT.</li>
+        </ul>
       </div>
       <pre><code>{
   "siteId": "example-site",
   "siteName": "Example Site",
+  "global": {
+    "includeServices": ["adobe-analytics", "adobe-edge"],
+    "excludeServices": ["meta"],
+    "excludeConditions": [
+      {
+        "source": "payload",
+        "path": "events[0].xdm.eventType",
+        "operator": "equals",
+        "expected": "web.webinteraction.linkClicks"
+      }
+    ]
+  },
   "assertions": [
     {
       "id": "pageview-once",
       "title": "Pageview fires only once",
-      "logic": "all",
+      "conditionsLogic": "all",
       "conditions": [
+        {
+          "source": "payload",
+          "path": "events[0].web.webPageDetails.siteSection",
+          "operator": "equals",
+          "expected": "Homepage"
+        }
+      ],
+      "validations": [
         {
           "source": "payload",
           "path": "events[0].xdm.eventType",
@@ -300,18 +330,20 @@
           <tr><td>id</td><td>string</td><td>Yes</td><td>Unique identifier for the rule.</td></tr>
           <tr><td>title</td><td>string</td><td>No</td><td>Displayed in UI and reports.</td></tr>
           <tr><td>description</td><td>string</td><td>No</td><td>Helpful context for teammates.</td></tr>
-          <tr><td>logic</td><td>"all" | "any"</td><td>No</td><td>Defaults to <strong>all</strong>.</td></tr>
+          <tr><td>conditionsLogic</td><td>"all" | "any"</td><td>No</td><td>Defaults to <strong>all</strong> (applies to conditions only).</td></tr>
           <tr><td>scope</td><td>"request" | "page"</td><td>No</td><td>Defaults to <strong>request</strong>.</td></tr>
-          <tr><td>conditions</td><td>array</td><td>Yes</td><td>One or more condition objects.</td></tr>
+          <tr><td>conditions</td><td>array</td><td>No</td><td>Applicability filters (when the assertion should run).</td></tr>
+          <tr><td>validations</td><td>array</td><td>Yes</td><td>All validations must pass when applicable.</td></tr>
           <tr><td>count</td><td>"exactly" | "at_least" | "at_most"</td><td>Only if scope=page</td><td>Use with <strong>value</strong>.</td></tr>
           <tr><td>value</td><td>number</td><td>Only if scope=page</td><td>The expected count.</td></tr>
         </tbody>
       </table>
+      <p class="section-sub" style="margin-top:12px;">Validations always use <strong>all</strong> logic (there is no override).</p>
     </section>
 
     <section class="section">
       <h2 class="section-title">3. Condition fields</h2>
-      <p class="section-sub">Conditions define where to look (source + path) and how to compare (operator + expected).</p>
+      <p class="section-sub">Condition objects are used in both <strong>conditions</strong> (applicability) and <strong>validations</strong> (checks that must pass).</p>
       <table>
         <thead>
           <tr>
@@ -375,11 +407,12 @@
       </div>
       <pre class="code-block"><code>{
   "id": "pageview-once",
-  "logic": "all",
+  "conditionsLogic": "all",
+  "conditions": [],
   "scope": "page",
   "count": "exactly",
   "value": 1,
-  "conditions": [
+  "validations": [
     {
       "source": "payload",
       "path": "events[0].xdm.eventType",
@@ -398,8 +431,9 @@
           <h3>Query parameter equals</h3>
           <pre class="code-block"><code>{
   "id": "config-id",
-  "logic": "all",
-  "conditions": [
+  "conditionsLogic": "all",
+  "conditions": [],
+  "validations": [
     {
       "source": "query",
       "path": "configId",
@@ -413,8 +447,9 @@
           <h3>Header exists</h3>
           <pre class="code-block"><code>{
   "id": "content-type",
-  "logic": "all",
-  "conditions": [
+  "conditionsLogic": "all",
+  "conditions": [],
+  "validations": [
     {
       "source": "headers",
       "path": "content-type",
@@ -427,8 +462,9 @@
           <h3>Raw body contains</h3>
           <pre class="code-block"><code>{
   "id": "raw-contains",
-  "logic": "all",
-  "conditions": [
+  "conditionsLogic": "all",
+  "conditions": [],
+  "validations": [
     {
       "source": "raw",
       "path": "",
@@ -439,11 +475,25 @@
 }</code></pre>
         </div>
         <div class="card span-full">
-          <h3>Any logic example</h3>
+          <h3>Any conditions example</h3>
           <pre class="code-block"><code>{
   "id": "event-type-any",
-  "logic": "any",
+  "conditionsLogic": "any",
   "conditions": [
+    {
+      "source": "payload",
+      "path": "events[0].web.webPageDetails.siteSection",
+      "operator": "equals",
+      "expected": "Homepage"
+    },
+    {
+      "source": "payload",
+      "path": "events[0].web.webPageDetails.siteSection",
+      "operator": "equals",
+      "expected": "Landing"
+    }
+  ],
+  "validations": [
     {
       "source": "payload",
       "path": "events[0].xdm.eventType",

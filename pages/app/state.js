@@ -49,6 +49,7 @@ export const elements = {
   sessionSiteInput: document.getElementById('session-site-input'),
   sessionSiteError: document.getElementById('session-site-error'),
   sessionLockTab: document.getElementById('session-lock-tab'),
+  sessionTabError: document.getElementById('session-tab-error'),
   sessionCancel: document.getElementById('session-cancel'),
   sessionSave: document.getElementById('session-save'),
   emptyState: document.getElementById('empty-state'),
@@ -115,5 +116,6 @@ export const elements = {
   uatExport: document.getElementById('uat-export'),
   uatReportClose: document.getElementById('uat-report-close'),
   sessionUatToggle: document.getElementById('session-uat-toggle'),
-  sessionUatNote: document.getElementById('session-uat-note')
+  sessionUatNote: document.getElementById('session-uat-note'),
+  debugModeBadge: document.getElementById('debug-mode-badge')
 };

@@ -5,6 +5,9 @@ import { bindPayloadActions, highlightJson, renderJson, tryParseFormEncoded, try
 import { setActiveTab, toggleSidebar } from './ui.js';
 import { renderUatForRequest } from './uat.js';
 
+/**
+ * Apply search filters and re-render requests list.
+ */
 export function applySearch() {
   const term = state.search.toLowerCase();
   const sessionId = state.settings?.selectedSessionId;
@@ -21,6 +24,9 @@ export function applySearch() {
   renderList();
 }
 
+/**
+ * Render request list grouped by page navigation.
+ */
 export function renderList() {
   const list = elements.requestList;
   if (!list) return;
@@ -46,7 +52,11 @@ export function renderList() {
           ? `${contextLabel}${eventLabel ? ` · ${eventLabel}` : ''}`
           : `${req.path}${eventLabel ? ` · ${eventLabel}` : ''}`;
         const description = `${escapeHtml(req.method || '')} · <span class="${statusClass}">${escapeHtml(statusText)}</span> · ${escapeHtml(pathLabel || '')}`;
+        const sessionForReq = state.sessions.find(s => s.id === req.sessionId);
+        const hasUatConfig = !!(sessionForReq?.uatEnabled && sessionForReq?.site && state.uatConfigs?.[sessionForReq.site]);
         const uatApplicable = req.uat?.results?.some(r => r.applicable !== false);
+        const uatPending = req.uat?.status === 'pending';
+        const showNa = hasUatConfig && !uatPending && (!req.uat?.results?.length || !uatApplicable);
         const uatStatus = uatApplicable
           ? (req.uat?.results?.some(r => r.status === 'failed' && r.applicable !== false)
             ? `<span class="ml-2 inline-flex items-center gap-1 text-[10px] font-semibold text-rose-600">
@@ -61,7 +71,14 @@ export function renderList() {
                 </svg>
                 Pass
               </span>`)
-          : '';
+          : (showNa
+            ? `<span class="ml-2 inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="size-4" aria-label="UAT not applicable">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636" />
+                </svg>
+                NA
+              </span>`
+            : '');
         return `
           <button class="w-full text-left px-4 py-3 border-b hover:bg-slate-50 ${active}" data-request-id="${req.id}">
             <div class="flex items-start justify-between gap-3">
@@ -83,9 +100,9 @@ export function renderList() {
       }).join('');
       return `
         <details class="border-b" open>
-          <summary class="cursor-pointer px-4 py-2 text-xs font-semibold text-slate-600 flex items-center justify-between">
-            <span class="truncate">${escapeHtml(group.title)}</span>
-            <span class="text-slate-400">${group.subtitle} | ${count} request${count === 1 ? '' : 's'}</span>
+          <summary class="cursor-pointer px-4 py-2 text-xs font-semibold text-slate-600 flex items-center justify-between gap-2">
+            <span class="truncate min-w-0">${escapeHtml(group.title)}</span>
+            <span class="text-slate-400 whitespace-nowrap shrink-0">${group.subtitle} | ${count} request${count === 1 ? '' : 's'}</span>
           </summary>
           <div id="${groupId}">
             ${rows}
@@ -106,6 +123,12 @@ export function renderList() {
   });
 }
 
+/**
+ * Render key/value rows as a table.
+ * @param {Array<{ key: string, value: string }>} params
+ * @param {string} [searchTerm='']
+ * @returns {string}
+ */
 export function renderKeyValueTable(params, searchTerm = '') {
   if (!params || !params.length) {
     return '<div class="text-slate-500 text-sm">None</div>';
@@ -121,6 +144,10 @@ export function renderKeyValueTable(params, searchTerm = '') {
   return `<div class="rounded border bg-white">${rows}</div>`;
 }
 
+/**
+ * Select a request and render details.
+ * @param {string} id
+ */
 export function selectRequest(id) {
   state.selectedId = id;
   const req = state.requests.find(item => item.id === id);
@@ -222,6 +249,10 @@ export function selectRequest(id) {
   renderList();
 }
 
+/**
+ * Scroll to the first highlighted match within a container.
+ * @param {Element} container
+ */
 function scrollFirstMatch(container) {
   if (!container) return;
   const mark = container.querySelector('mark');
@@ -231,6 +262,11 @@ function scrollFirstMatch(container) {
   });
 }
 
+/**
+ * Extract parsed JSON from a request payload.
+ * @param {object} req
+ * @returns {object|null}
+ */
 export function extractPayloadJson(req) {
   if (!req || !req.body) return null;
   if (req.body.parsed && typeof req.body.parsed === 'object') return req.body.parsed;
@@ -240,6 +276,11 @@ export function extractPayloadJson(req) {
   return null;
 }
 
+/**
+ * Derive a human-readable event type label.
+ * @param {object} req
+ * @returns {string}
+ */
 export function getEventTypeLabel(req) {
   const payload = extractPayloadJson(req);
   const eventType = payload?.events?.[0]?.xdm?.eventType || payload?.xdm?.eventType;
@@ -248,6 +289,12 @@ export function getEventTypeLabel(req) {
   return toTitleCase(last);
 }
 
+/**
+ * Create a request description line.
+ * @param {object} req
+ * @param {string} eventLabel
+ * @returns {string}
+ */
 export function getRequestDescription(req, eventLabel) {
   const contextLabel = getAdobeAnalyticsContext(req);
   if (contextLabel) {
@@ -256,6 +303,11 @@ export function getRequestDescription(req, eventLabel) {
   return `${req.method} · ${req.path}${eventLabel ? ` · ${eventLabel}` : ''}`;
 }
 
+/**
+ * Extract Adobe Analytics context from request path.
+ * @param {object} req
+ * @returns {string}
+ */
 export function getAdobeAnalyticsContext(req) {
   if (!req?.path) return '';
   if (!req.path.startsWith('/b/ss/')) return '';
@@ -268,13 +320,18 @@ export function getAdobeAnalyticsContext(req) {
   return [rsidLabel, versionLabel].filter(Boolean).join(' · ');
 }
 
+/**
+ * Group requests by page navigation ID.
+ * @param {Array<object>} requests
+ * @returns {Array<object>}
+ */
 export function groupRequestsByPageSessions(requests) {
   const sorted = [...requests].sort((a, b) => (a.timeStamp || 0) - (b.timeStamp || 0));
   const groups = [];
   let current = null;
 
   sorted.forEach(req => {
-    const pageUrl = req.pageUrl || req.url || req.path || '/';
+    const pageUrl = req.pageUrl || req.documentUrl || req.initiator || req.url || req.path || '/';
     const navKey = req.navId ? `${pageUrl}::${req.navId}` : pageUrl;
     const newGroup = !current || current.key !== navKey;
 
@@ -295,6 +352,11 @@ export function groupRequestsByPageSessions(requests) {
   return groups.reverse();
 }
 
+/**
+ * Safely get pathname from a URL string.
+ * @param {string} url
+ * @returns {string}
+ */
 export function getPathFromUrlSafe(url) {
   try {
     const parsed = new URL(url);

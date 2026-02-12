@@ -10,6 +10,10 @@ import { validateUatConfig } from '../../lib/uat.js';
 
 let pendingUatConfig = null;
 
+/**
+ * Update persisted settings via background.
+ * @param {object} patch
+ */
 function updateSettings(patch) {
   if (!state.settings) return;
   const next = { ...state.settings, ...patch };
@@ -20,6 +24,9 @@ function updateSettings(patch) {
   });
 }
 
+/**
+ * Refresh local state from background storage.
+ */
 function refreshState() {
   api.runtime.sendMessage({ type: 'getState' }, response => {
     if (!response) return;
@@ -36,6 +43,7 @@ function refreshState() {
       elements.observingState.classList.remove('hidden');
       elements.emptyState.classList.add('hidden');
     }
+    updateDebugBadge();
     updateSessionSummary();
   });
 }
@@ -219,6 +227,10 @@ if (elements.uatSiteNew) {
   });
 }
 
+/**
+ * Resolve selected site in the UAT modal.
+ * @returns {string}
+ */
 function getUatSelectedSite() {
   const custom = elements.uatSiteInput && !elements.uatSiteInput.classList.contains('hidden')
     ? elements.uatSiteInput.value.trim()
@@ -258,6 +270,11 @@ if (elements.uatCloseDrawer) {
   });
 }
 
+/**
+ * Render the UAT assertions drawer contents.
+ * @param {string} site
+ * @param {object|null} config
+ */
 function renderUatAssertionsDrawer(site, config) {
   if (!elements.uatAssertionsBody) return;
   const assertions = config?.assertions || [];
@@ -273,25 +290,33 @@ function renderUatAssertionsDrawer(site, config) {
     const title = item.title || item.id || 'Assertion';
     const description = item.description ? `<div class="mt-1 text-xs text-slate-500">${escapeHtml(item.description)}</div>` : '';
     const scope = item.scope ? `<span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">${escapeHtml(item.scope)}</span>` : '';
-    const logic = item.logic ? `<span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">${escapeHtml(item.logic)}</span>` : '';
-    const chips = (scope || logic) ? `<div class="mt-2 flex gap-2">${scope}${logic}</div>` : '';
+    const logic = item.conditionsLogic ? `<span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">conditions: ${escapeHtml(item.conditionsLogic)}</span>` : '';
+    const chips = (scope || logic) ? `<div class="mt-2 flex gap-2 flex-wrap">${scope}${logic}</div>` : '';
     const count = item.count && item.value !== undefined
       ? `<div class="mt-2 text-xs text-slate-600"><span class="font-semibold text-slate-700">Count</span> <span class="text-slate-400">•</span> ${escapeHtml(item.count)} = ${escapeHtml(String(item.value))}</div>`
       : '';
+    const renderList = (list) => list.map(cond => {
+      const source = escapeHtml(cond.source || 'payload');
+      const path = escapeHtml(cond.path || '');
+      const operator = escapeHtml(cond.operator || 'exists');
+      const expected = cond.expected !== undefined ? `<span class="text-slate-500">"${escapeHtml(String(cond.expected))}"</span>` : '';
+      return `
+        <div class="rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700">
+          <div><span class="font-semibold">${source}</span> · <span class="text-slate-500">${path || 'raw'}</span></div>
+          <div class="text-slate-600">${operator}${expected ? ` · ${expected}` : ''}</div>
+        </div>
+      `;
+    }).join('');
     const conditions = Array.isArray(item.conditions) && item.conditions.length
-      ? `<div class="mt-3 space-y-2">
-          ${item.conditions.map(cond => {
-            const source = escapeHtml(cond.source || 'payload');
-            const path = escapeHtml(cond.path || '');
-            const operator = escapeHtml(cond.operator || 'exists');
-            const expected = cond.expected !== undefined ? `<span class="text-slate-500">"${escapeHtml(String(cond.expected))}"</span>` : '';
-            return `
-              <div class="rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700">
-                <div><span class="font-semibold">${source}</span> · <span class="text-slate-500">${path || 'raw'}</span></div>
-                <div class="text-slate-600">${operator}${expected ? ` · ${expected}` : ''}</div>
-              </div>
-            `;
-          }).join('')}
+      ? `<div class="mt-3">
+          <div class="text-[10px] uppercase tracking-wide text-slate-400 mb-2">Applies when</div>
+          <div class="space-y-2">${renderList(item.conditions)}</div>
+        </div>`
+      : '';
+    const validations = Array.isArray(item.validations) && item.validations.length
+      ? `<div class="mt-3">
+          <div class="text-[10px] uppercase tracking-wide text-slate-400 mb-2">Validations (all must pass)</div>
+          <div class="space-y-2">${renderList(item.validations)}</div>
         </div>`
       : '';
     return `
@@ -307,12 +332,16 @@ function renderUatAssertionsDrawer(site, config) {
           ${chips}
           ${count}
           ${conditions}
+          ${validations}
         </div>
       </details>
     `;
   }).join(''));
 }
 
+/**
+ * Open the UAT assertions drawer.
+ */
 function openUatAssertionsDrawer() {
   const activeSite = state.sessions.find(s => s.id === state.settings?.selectedSessionId)?.site || '';
   const sites = Array.from(new Set(Object.keys(state.uatConfigs || {}))).sort();
@@ -335,6 +364,9 @@ function openUatAssertionsDrawer() {
   }
 }
 
+/**
+ * Close the UAT assertions drawer.
+ */
 function closeUatAssertionsDrawer() {
   elements.uatAssertionsDrawer?.classList.add('translate-x-full');
   elements.uatAssertionsOverlay?.classList.add('hidden');
@@ -417,6 +449,7 @@ if (elements.allowlistSave) {
     updateSettings({
       allowlist: merged.length ? merged : DEFAULT_ALLOWLIST,
       enableHooks: !!elements.enableHooks?.checked,
+      debugHooks: !!state.settings?.debugHooks,
       serviceMappings: mappings
     });
     elements.allowlistDialog.close();
@@ -451,10 +484,16 @@ if (elements.sessionSave) {
       elements.sessionSiteError.classList.remove('hidden');
       return;
     }
+    if (elements.sessionTabError) elements.sessionTabError.classList.add('hidden');
     const name = elements.sessionNameInput.value.trim();
     const lockTabId = getSelectedTabId();
+    if (lockTabId === null) {
+      if (elements.sessionTabError) elements.sessionTabError.classList.remove('hidden');
+      toast('Select a tab to observe');
+      return;
+    }
     const uatEnabled = !!elements.sessionUatToggle?.checked;
-    if (state.sessionMode === 'rename' && state.sessionEditId) {
+    if (state.sessionMode === 'update' && state.sessionEditId) {
       api.runtime.sendMessage({ type: 'updateSession', id: state.sessionEditId, name, site, lockTabId, uatEnabled }, () => {
         elements.sessionDialog.close();
         renderSessions();
@@ -660,6 +699,7 @@ api.runtime.onMessage.addListener(message => {
   }
   if (message.type === 'settingsUpdated') {
     state.settings = message.settings;
+    updateDebugBadge();
   }
   if (message.type === 'uatConfigsUpdated') {
     state.uatConfigs = message.uatConfigs || {};
@@ -698,6 +738,25 @@ document.querySelectorAll('.help-tab').forEach(button => {
 refreshState();
 initTour();
 
+// Expose debug hook toggle for developers via extension page console.
+window.LaunchObserverDebug = {
+  enableHookLogging(value = true) {
+    updateSettings({ debugHooks: !!value });
+    return !!value;
+  },
+  disableHookLogging() {
+    updateSettings({ debugHooks: false });
+    return false;
+  },
+  isHookLoggingEnabled() {
+    return !!state.settings?.debugHooks;
+  }
+};
+
+/**
+ * Switch help modal tabs.
+ * @param {string} tabId
+ */
 function setHelpTab(tabId) {
   document.querySelectorAll('.help-tab').forEach(button => {
     const isActive = button.getAttribute('data-help-tab') === tabId;
@@ -713,4 +772,16 @@ function setHelpTab(tabId) {
   document.querySelectorAll('.help-panel').forEach(panel => {
     panel.classList.toggle('hidden', panel.id !== tabId);
   });
+}
+
+/**
+ * Toggle the debug mode badge under the version number.
+ */
+function updateDebugBadge() {
+  if (!elements.debugModeBadge) return;
+  if (state.settings?.debugHooks) {
+    elements.debugModeBadge.classList.remove('hidden');
+  } else {
+    elements.debugModeBadge.classList.add('hidden');
+  }
 }

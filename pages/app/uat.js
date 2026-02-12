@@ -2,6 +2,10 @@ import { elements, state } from './state.js';
 import { escapeHtml, formatTime, setHTML } from './utils.js';
 import { buildUatTemplate, validateUatConfig } from '../../lib/uat.js';
 
+/**
+ * Render UAT status for the selected request.
+ * @param {object|null} req
+ */
 export function renderUatForRequest(req) {
   if (!elements.uatStatus) return;
   if (elements.uatOpenDrawer) elements.uatOpenDrawer.classList.add('hidden');
@@ -28,7 +32,16 @@ export function renderUatForRequest(req) {
     setStatusLine('idle', 'UAT not applicable for this request.');
     return;
   }
-  const failed = uat.results.filter(r => r.status === 'failed');
+  const applicableResults = uat.results.filter(r => r.applicable !== false);
+  if (!applicableResults.length) {
+    setStatusLine('idle', 'UAT not applicable for this request.');
+    if (elements.uatOpenDrawer) {
+      elements.uatOpenDrawer.classList.remove('hidden');
+      elements.uatOpenDrawer.onclick = () => openUatDrawer(req);
+    }
+    return;
+  }
+  const failed = applicableResults.filter(r => r.status === 'failed');
   if (failed.length) {
     setStatusLine('failed', 'UAT validation failed');
   } else {
@@ -40,6 +53,11 @@ export function renderUatForRequest(req) {
   }
 }
 
+/**
+ * Render the UAT status line with icon and label.
+ * @param {string} state
+ * @param {string} label
+ */
 function setStatusLine(state, label) {
   if (!elements.uatStatus) return;
   let icon = '';
@@ -76,11 +94,15 @@ function setStatusLine(state, label) {
   setHTML(elements.uatStatus, `${icon}<span class="${toneClass}">${escapeHtml(label)}</span>`);
 }
 
+/**
+ * Open the UAT assertion detail modal.
+ * @param {object} result
+ */
 export function openUatDetail(result) {
   if (!elements.uatDetailDialog || !elements.uatDetailBody || !elements.uatDetailTitle) return;
   elements.uatDetailTitle.textContent = result.title || 'Assertion Details';
 
-  const conditionsHtml = result.conditions.map(cond => {
+  const renderList = (items) => items.map(cond => {
     const actual = cond.actual && cond.actual.length ? cond.actual.join(', ') : '—';
     const expected = cond.expected !== undefined ? JSON.stringify(cond.expected) : '—';
     return `
@@ -92,6 +114,24 @@ export function openUatDetail(result) {
       </div>
     `;
   }).join('');
+
+  const conditionsHtml = (result.conditions && result.conditions.length)
+    ? `
+      <div>
+        <div class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Applicability conditions</div>
+        <div class="space-y-2">${renderList(result.conditions)}</div>
+      </div>
+    `
+    : '';
+
+  const validationsHtml = (result.validations && result.validations.length)
+    ? `
+      <div>
+        <div class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Validations</div>
+        <div class="space-y-2">${renderList(result.validations)}</div>
+      </div>
+    `
+    : '';
 
   const countHtml = result.count
     ? `
@@ -106,6 +146,7 @@ export function openUatDetail(result) {
   setHTML(elements.uatDetailBody, `
     <div class="space-y-3">
       ${conditionsHtml}
+      ${validationsHtml}
       ${countHtml}
     </div>
   `);
@@ -113,10 +154,17 @@ export function openUatDetail(result) {
   elements.uatDetailDialog.showModal();
 }
 
+/**
+ * Close the UAT detail modal.
+ */
 export function closeUatDetail() {
   elements.uatDetailDialog?.close();
 }
 
+/**
+ * Open the UAT results drawer for a request.
+ * @param {object} req
+ */
 export function openUatDrawer(req) {
   if (!elements.uatDrawer || !elements.uatDrawerBody || !elements.uatDrawerOverlay) return;
   const uat = req?.uat;
@@ -130,33 +178,61 @@ export function openUatDrawer(req) {
   elements.uatDrawerOverlay.onclick = () => closeUatDrawer();
 }
 
+/**
+ * Close the UAT results drawer.
+ */
 export function closeUatDrawer() {
   elements.uatDrawer?.classList.add('translate-x-full');
   elements.uatDrawerOverlay?.classList.add('hidden');
 }
 
+/**
+ * Render results list for the UAT drawer.
+ * @param {Array<object>} results
+ * @returns {string}
+ */
 function renderUatDrawerResults(results) {
-  const sections = ['failed', 'passed'];
-  return sections.map(status => {
-    const items = results.filter(r => r.status === status);
+  const grouped = {
+    failed: results.filter(r => r.status === 'failed' && r.applicable !== false),
+    passed: results.filter(r => r.status === 'passed' && r.applicable !== false),
+    skipped: results.filter(r => r.status === 'skipped' || r.applicable === false)
+  };
+  const sections = [
+    { key: 'failed', tone: 'rose' },
+    { key: 'passed', tone: 'emerald' },
+    { key: 'skipped', tone: 'slate' }
+  ];
+  return sections.map(section => {
+    const items = grouped[section.key];
     if (!items.length) return '';
-    const tone = status === 'failed' ? 'rose' : 'emerald';
     return `
-      <div class="mb-4">
-        <div class="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-${tone}-700 mb-2">
-          <span>${status}</span>
-          <span class="text-slate-400">${items.length}</span>
-        </div>
+      <details class="mb-4" open>
+        <summary class="cursor-pointer flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-${section.tone}-700 mb-2">
+          <span>${section.key}</span>
+          <span class="flex items-center gap-1 text-slate-400">
+            ${items.length}
+            <svg viewBox="0 0 16 16" fill="currentColor" class="size-3 transition-transform group-open:rotate-180">
+              <path d="M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z" />
+            </svg>
+          </span>
+        </summary>
         <div class="space-y-3">
           ${items.map(renderUatDrawerItem).join('')}
         </div>
-      </div>
+      </details>
     `;
   }).join('');
 }
 
+/**
+ * Render a single UAT drawer item.
+ * @param {object} result
+ * @returns {string}
+ */
 function renderUatDrawerItem(result) {
-  const conditionList = result.conditions.map(cond => {
+  const relevantValidations = (result.validations || []).filter(cond => cond.used);
+  const validationsToShow = relevantValidations.length ? relevantValidations : (result.validations || []);
+  const validationList = validationsToShow.map(cond => {
     const actual = cond.actual && cond.actual.length ? cond.actual.join(', ') : '—';
     const expected = cond.expected !== undefined ? JSON.stringify(cond.expected) : '—';
     return `
@@ -175,6 +251,30 @@ function renderUatDrawerItem(result) {
       </div>
     `;
   }).join('');
+  const conditionsList = (result.conditions && result.conditions.length)
+    ? `<div class="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+         <div class="text-[10px] uppercase tracking-wide text-slate-400 mb-2">Applies when</div>
+         <div class="space-y-2">
+           ${(result.conditions || []).map(cond => {
+             const expected = cond.expected !== undefined ? escapeHtml(String(cond.expected)) : '—';
+             return `
+               <div class="rounded border border-slate-200 bg-white px-2 py-1.5">
+                 <div class="flex items-start justify-between gap-2">
+                   <div class="min-w-0">
+                     <div class="truncate font-semibold text-slate-700">${escapeHtml(cond.path || '(root)')}</div>
+                     <div class="text-[10px] uppercase tracking-wide text-slate-400">${escapeHtml(cond.source || 'payload')}</div>
+                   </div>
+                   <span class="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">${escapeHtml(cond.operator || 'exists')}</span>
+                 </div>
+                 <div class="mt-2 grid grid-cols-1 gap-1">
+                   <div><span class="font-semibold text-slate-700">Expected</span> <span class="text-slate-500">•</span> ${expected}</div>
+                 </div>
+               </div>
+             `;
+           }).join('')}
+         </div>
+       </div>`
+    : '';
   const countBlock = result.count
     ? `<div class="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
          <div class="text-[10px] uppercase tracking-wide text-slate-400">Count validation</div>
@@ -185,29 +285,36 @@ function renderUatDrawerItem(result) {
     : '';
   return `
     <details class="rounded border border-slate-200 bg-white p-3 group">
-      <summary class="cursor-pointer text-sm font-semibold text-slate-800 flex items-center justify-between gap-2">
-        <div class="min-w-0">
+      <summary class="cursor-pointer text-sm font-semibold text-slate-800 flex items-start justify-between gap-2">
+        <div class="w-[80%] pr-2 min-w-0">
           <div class="truncate">${escapeHtml(result.title)}</div>
           ${result.description ? `<div class="text-xs font-normal text-slate-500 mt-1">${escapeHtml(result.description)}</div>` : ''}
         </div>
-        <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4 text-slate-400 transition-transform group-open:rotate-180">
-          <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 10.94l3.71-3.71a.75.75 0 1 1 1.06 1.06l-4.24 4.24a.75.75 0 0 1-1.06 0L5.21 8.29a.75.75 0 0 1 .02-1.08Z" clip-rule="evenodd" />
-        </svg>
+        <span class="w-6 flex-shrink-0 text-right">
+          <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4 text-slate-400 transition-transform group-open:rotate-180">
+            <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 10.94l3.71-3.71a.75.75 0 1 1 1.06 1.06l-4.24 4.24a.75.75 0 0 1-1.06 0L5.21 8.29a.75.75 0 0 1 .02-1.08Z" clip-rule="evenodd" />
+          </svg>
+        </span>
       </summary>
       <div class="mt-3 space-y-3">
-        ${conditionList}
+        ${conditionsList}
+        ${validationList}
         ${countBlock}
       </div>
     </details>
   `;
 }
 
+/**
+ * Open the UAT report modal for the active session.
+ */
 export function openUatReport() {
   if (!elements.uatReportDialog) return;
   const session = state.sessions.find(s => s.id === state.settings?.selectedSessionId);
   if (!session) return;
   const requests = state.requests.filter(r => r.sessionId === session.id);
   const { results, summary } = collectUatReportResults(requests);
+  const grouped = groupResultsByPagePath(results);
 
   elements.uatReportMeta.textContent = `${session.site} · ${session.name || 'Untitled'} · ${formatTime(session.createdAt)}`;
 
@@ -226,12 +333,17 @@ export function openUatReport() {
   if (!results.length) {
     setHTML(elements.uatReportBody, `${summaryCard}<div class=\"text-sm text-slate-500\">No UAT results for this session.</div>`);
   } else {
-    setHTML(elements.uatReportBody, `${summaryCard}${results.map(renderUatReportCard).join('')}`);
+    setHTML(elements.uatReportBody, `${summaryCard}${renderUatReportGroups(grouped)}`);
   }
 
   elements.uatReportDialog.showModal();
 }
 
+/**
+ * Collect UAT results and summary for a session.
+ * @param {Array<object>} requests
+ * @returns {{ results: Array<object>, summary: object }}
+ */
 function collectUatReportResults(requests) {
   const items = [];
   let passed = 0;
@@ -241,11 +353,14 @@ function collectUatReportResults(requests) {
     if (!req.uat || !req.uat.results || !req.uat.results.length) return;
     requestCount += 1;
     req.uat.results.forEach(result => {
+      if (result.applicable === false || result.status === 'skipped') return;
       if (result.status === 'passed') passed += 1;
       if (result.status === 'failed') failed += 1;
       items.push({
         requestId: req.id,
         requestUrl: req.url,
+        pageUrl: req.pageUrl || '',
+        pagePath: getPathFromUrlSafe(req.pageUrl || ''),
         timeStamp: req.timeStamp,
         result
       });
@@ -262,10 +377,51 @@ function collectUatReportResults(requests) {
   };
 }
 
+/**
+ * Group UAT results by page path.
+ * @param {Array<object>} results
+ * @returns {Array<{ path: string, items: Array<object> }>}
+ */
+function groupResultsByPagePath(results) {
+  const map = new Map();
+  results.forEach(item => {
+    const key = item.pagePath || '/';
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(item);
+  });
+  return Array.from(map.entries()).map(([path, items]) => ({
+    path,
+    items: items.sort((a, b) => (b.timeStamp || 0) - (a.timeStamp || 0))
+  })).sort((a, b) => (b.items[0]?.timeStamp || 0) - (a.items[0]?.timeStamp || 0));
+}
+
+/**
+ * Render grouped UAT report sections.
+ * @param {Array<{ path: string, items: Array<object> }>} groups
+ * @returns {string}
+ */
+function renderUatReportGroups(groups) {
+  return groups.map(group => `
+    <div class="mb-4">
+      <div class="flex items-center justify-between text-xs font-semibold text-slate-600 mb-2">
+        <span class="truncate">${escapeHtml(group.path)}</span>
+        <span class="text-slate-400">${group.items.length} result${group.items.length === 1 ? '' : 's'}</span>
+      </div>
+      ${group.items.map(renderUatReportCard).join('')}
+    </div>
+  `).join('');
+}
+
+/**
+ * Render a UAT report card.
+ * @param {object} item
+ * @returns {string}
+ */
 function renderUatReportCard(item) {
   const result = item.result;
   const statusClass = result.status === 'passed' ? 'text-emerald-700' : 'text-rose-700';
-  const conditionList = result.conditions.map(cond => {
+  const validationsToShow = (result.validations && result.validations.length) ? result.validations : [];
+  const validationList = validationsToShow.map(cond => {
     const actual = cond.actual && cond.actual.length ? cond.actual.join(', ') : '—';
     const expected = cond.expected !== undefined ? JSON.stringify(cond.expected) : '—';
     return `
@@ -274,6 +430,18 @@ function renderUatReportCard(item) {
       </li>
     `;
   }).join('');
+  const applicabilityList = (result.conditions && result.conditions.length)
+    ? `<ul class="mt-2 space-y-1">
+         ${result.conditions.map(cond => {
+           const expected = cond.expected !== undefined ? ` ${escapeHtml(String(cond.expected))}` : '';
+           return `
+             <li class="text-xs text-slate-500">
+               Applies when ${escapeHtml(cond.path || '(root)')} ${escapeHtml(cond.operator)}${expected}
+             </li>
+           `;
+         }).join('')}
+       </ul>`
+    : '';
 
   const countBlock = result.count
     ? `<div class="text-xs text-slate-600">Count ${escapeHtml(result.count.count)}: expected ${escapeHtml(String(result.count.expected))}, actual ${escapeHtml(String(result.count.actual))}</div>`
@@ -284,21 +452,25 @@ function renderUatReportCard(item) {
       <div class="flex items-start justify-between gap-2">
         <div>
           <div class="text-sm font-semibold">${escapeHtml(result.title)}</div>
-          <div class="text-xs text-slate-500">${escapeHtml(item.requestUrl)}</div>
         </div>
         <div class="text-xs font-semibold ${statusClass}">${result.status.toUpperCase()}</div>
       </div>
-      <ul class="mt-2 space-y-1">${conditionList}</ul>
+      ${applicabilityList}
+      <ul class="mt-2 space-y-1">${validationList}</ul>
       ${countBlock ? `<div class="mt-2">${countBlock}</div>` : ''}
     </div>
   `;
 }
 
+/**
+ * Export UAT report as a printable PDF.
+ */
 export function exportUatPdf() {
   const session = state.sessions.find(s => s.id === state.settings?.selectedSessionId);
   if (!session) return;
   const requests = state.requests.filter(r => r.sessionId === session.id);
   const { results, summary } = collectUatReportResults(requests);
+  const grouped = groupResultsByPagePath(results);
   const doc = window.open('', '_blank');
   if (!doc) return;
   const summaryBlock = `
@@ -313,7 +485,7 @@ export function exportUatPdf() {
     </div>
   `;
   const body = results.length
-    ? `${summaryBlock}${results.map(renderUatReportCard).join('')}`
+    ? `${summaryBlock}${renderUatReportGroups(grouped)}`
     : `${summaryBlock}<div style="color:#64748b;font-size:14px;">No UAT results for this session.</div>`;
 
   doc.document.write(`<!doctype html>
@@ -353,6 +525,23 @@ export function exportUatPdf() {
   doc.print();
 }
 
+/**
+ * Safely get pathname from a URL string.
+ * @param {string} url
+ * @returns {string}
+ */
+function getPathFromUrlSafe(url) {
+  try {
+    const parsed = new URL(url);
+    return parsed.pathname || '/';
+  } catch {
+    return url || '/';
+  }
+}
+
+/**
+ * Download a sample UAT template JSON file.
+ */
 export function buildTemplateDownload() {
   const template = buildUatTemplate('example-site');
   const blob = new Blob([JSON.stringify(template, null, 2)], { type: 'application/json' });

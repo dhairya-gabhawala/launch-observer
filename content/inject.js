@@ -1,8 +1,21 @@
 (() => {
+  if (window.__launchObserverHookInstalled) return;
+  window.__launchObserverHookInstalled = true;
   let allowlist = [];
   let enableHooks = false;
+  let allowlistReady = false;
+  let hookCounter = 0;
+  const pendingPayloads = [];
+  const pendingPageContext = [];
+  const MAX_PENDING = 50;
 
+  /**
+   * Check URL against the allowlist.
+   * @param {string} url
+   * @returns {boolean}
+   */
   function matchesAllowlist(url) {
+    if (!allowlistReady) return true;
     try {
       const domain = new URL(url).hostname;
       return allowlist.some(entry => {
@@ -16,6 +29,11 @@
     }
   }
 
+  /**
+   * Extract requestId query param from URL.
+   * @param {string} url
+   * @returns {string|null}
+   */
   function getRequestId(url) {
     try {
       const parsed = new URL(url);
@@ -25,10 +43,39 @@
     }
   }
 
+  /**
+   * Post captured payload back to the extension.
+   * @param {string} url
+   * @param {string} body
+   * @param {string} [contentType='']
+   */
+  function enqueuePayload(url, body, contentType = '') {
+    if (pendingPayloads.length >= MAX_PENDING) pendingPayloads.shift();
+    pendingPayloads.push({ url, body, contentType });
+  }
+
+  function enqueuePageContext(url) {
+    if (pendingPageContext.length >= MAX_PENDING) pendingPageContext.shift();
+    pendingPageContext.push({ url });
+  }
+
+  function flushPending() {
+    if (!allowlistReady || !enableHooks) return;
+    pendingPayloads.splice(0).forEach(item => {
+      postPayload(item.url, item.body, item.contentType);
+    });
+    pendingPageContext.splice(0).forEach(item => {
+      postPageContext(item.url);
+    });
+  }
+
   function postPayload(url, body, contentType = '') {
-    if (!enableHooks) return;
-    if (!matchesAllowlist(url)) return;
+    if (!enableHooks) {
+      if (!allowlistReady) enqueuePayload(url, body, contentType);
+      return;
+    }
     const requestId = getRequestId(url);
+    const hookId = `${Date.now()}-${hookCounter++}`;
     const parsed = tryParseJson(body);
     const payload = {
       type: parsed ? 'json' : 'text',
@@ -41,10 +88,36 @@
       type: 'capturedPayload',
       requestId,
       url,
-      payload
+      payload,
+      hookId,
+      hookTs: Date.now(),
+      pageUrl: window.location.href
     }, '*');
   }
 
+  function postPageContext(url) {
+    if (!enableHooks) {
+      if (!allowlistReady) enqueuePageContext(url);
+      return;
+    }
+    const requestId = getRequestId(url);
+    const hookId = `${Date.now()}-${hookCounter++}`;
+    window.postMessage({
+      source: 'launch-observer-page',
+      type: 'pageContext',
+      requestId,
+      url,
+      hookId,
+      hookTs: Date.now(),
+      pageUrl: window.location.href
+    }, '*');
+  }
+
+  /**
+   * Convert request body into text when possible.
+   * @param {any} body
+   * @returns {Promise<string>}
+   */
   function bodyToText(body) {
     if (body == null) return Promise.resolve('');
     if (typeof body === 'string') return Promise.resolve(body);
@@ -79,6 +152,11 @@
     }
   }
 
+  /**
+   * Attempt to parse JSON safely.
+   * @param {string} text
+   * @returns {object|null}
+   */
   function tryParseJson(text) {
     if (!text) return null;
     const trimmed = text.trim();
@@ -114,14 +192,24 @@
       }
       if (body) {
         bodyToText(body).then(text => {
-          if (text) postPayload(url, text, contentType);
+          if (text) {
+            postPayload(url, text, contentType);
+          } else {
+            postPageContext(url);
+          }
         });
       } else if (request) {
         try {
           request.clone().text().then(text => {
-            if (text) postPayload(url, text, contentType);
+            if (text) {
+              postPayload(url, text, contentType);
+            } else {
+              postPageContext(url);
+            }
           });
         } catch {}
+      } else {
+        postPageContext(url);
       }
     } catch {}
     return originalFetch.apply(this, arguments);
@@ -132,7 +220,11 @@
     navigator.sendBeacon = function(url, data) {
       try {
         bodyToText(data).then(text => {
-          if (text) postPayload(url, text, '');
+          if (text) {
+            postPayload(url, text, '');
+          } else {
+            postPageContext(url);
+          }
         });
       } catch {}
       return originalSendBeacon(url, data);
@@ -158,8 +250,14 @@
       if (this.__lo_url && body) {
         bodyToText(body).then(text => {
           const contentType = this.__lo_headers?.['content-type'] || '';
-          if (text) postPayload(this.__lo_url, text, contentType);
+          if (text) {
+            postPayload(this.__lo_url, text, contentType);
+          } else {
+            postPageContext(this.__lo_url);
+          }
         });
+      } else if (this.__lo_url) {
+        postPageContext(this.__lo_url);
       }
     } catch {}
     return originalSend.apply(this, arguments);
@@ -169,6 +267,8 @@
     if (!event.data || event.data.source !== 'launch-observer' || event.data.type !== 'allowlist') return;
     allowlist = Array.isArray(event.data.allowlist) ? event.data.allowlist : [];
     enableHooks = !!event.data.enableHooks;
+    allowlistReady = true;
+    flushPending();
   });
 
   window.postMessage({ source: 'launch-observer-page', type: 'requestAllowlist' }, '*');

@@ -2,6 +2,12 @@ import { elements, state } from './state.js';
 import { escapeHtml, highlightText } from './utils.js';
 import { toast } from './ui.js';
 
+/**
+ * Render JSON value into an expandable tree.
+ * @param {any} value
+ * @param {string} [searchTerm='']
+ * @returns {string}
+ */
 export function renderJson(value, searchTerm = '') {
   if (value === null || value === undefined) {
     return `<span class="text-slate-400">null</span>`;
@@ -17,6 +23,14 @@ export function renderJson(value, searchTerm = '') {
   `;
 }
 
+/**
+ * Render JSON nodes recursively as tree HTML.
+ * @param {any} value
+ * @param {string} [path='']
+ * @param {number} [depth=0]
+ * @param {string} [searchTerm='']
+ * @returns {string}
+ */
 export function renderJsonTree(value, path = '', depth = 0, searchTerm = '') {
   if (value === null || value === undefined) {
     return `<div class="px-3 py-2 text-xs text-slate-500">null</div>`;
@@ -61,6 +75,15 @@ export function renderJsonTree(value, path = '', depth = 0, searchTerm = '') {
   }).join('');
 }
 
+/**
+ * Render a single node with inline actions.
+ * @param {any} value
+ * @param {string} path
+ * @param {number} depth
+ * @param {string} searchTerm
+ * @param {string} label
+ * @returns {{ html: string, matched: boolean, inline: boolean }}
+ */
 export function renderNode(value, path, depth, searchTerm, label) {
   const matches = searchTerm ? nodeMatches(value, path, searchTerm) : false;
   if (value === null || value === undefined || typeof value !== 'object') {
@@ -104,6 +127,13 @@ export function renderNode(value, path, depth, searchTerm, label) {
   return { html, matched: matches, inline: false };
 }
 
+/**
+ * Check whether a path/value matches a term.
+ * @param {any} value
+ * @param {string} path
+ * @param {string} term
+ * @returns {boolean}
+ */
 export function doesMatch(value, path, term) {
   const lower = term.toLowerCase();
   if (path.toLowerCase().includes(lower)) return true;
@@ -112,6 +142,13 @@ export function doesMatch(value, path, term) {
   return false;
 }
 
+/**
+ * Recursively check nodes for a match.
+ * @param {any} value
+ * @param {string} path
+ * @param {string} term
+ * @returns {boolean}
+ */
 export function nodeMatches(value, path, term) {
   if (doesMatch(value, path, term)) return true;
   if (value === null || value === undefined) return false;
@@ -122,6 +159,13 @@ export function nodeMatches(value, path, term) {
   return Object.entries(value).some(([key, val]) => nodeMatches(val, path ? `${path}.${key}` : key, term));
 }
 
+/**
+ * Decide whether to open a tree node.
+ * @param {number} depth
+ * @param {string} searchTerm
+ * @param {boolean} matched
+ * @returns {boolean}
+ */
 export function shouldOpenNode(depth, searchTerm, matched) {
   if (searchTerm) return matched;
   if (state.payloadExpand === 'all') return true;
@@ -130,6 +174,9 @@ export function shouldOpenNode(depth, searchTerm, matched) {
   return depth <= 1;
 }
 
+/**
+ * Bind copy actions in payload rendering.
+ */
 export function bindPayloadActions() {
   const container = elements.detailPayload;
   if (!container) return;
@@ -147,6 +194,10 @@ export function bindPayloadActions() {
   });
 }
 
+/**
+ * Copy a string to clipboard if available.
+ * @param {string} text
+ */
 export function copyToClipboard(text) {
   if (!text) return;
   if (navigator.clipboard?.writeText) {
@@ -154,6 +205,11 @@ export function copyToClipboard(text) {
   }
 }
 
+/**
+ * Attempt to parse JSON safely from a string.
+ * @param {string} value
+ * @returns {object|null}
+ */
 export function tryParseJsonString(value) {
   const trimmed = value.trim();
   if (!trimmed) return null;
@@ -165,6 +221,11 @@ export function tryParseJsonString(value) {
   }
 }
 
+/**
+ * Attempt to parse form-encoded payload.
+ * @param {string} text
+ * @returns {{ raw: string, params: Array<object> }|null}
+ */
 export function tryParseFormEncoded(text) {
   if (!text || typeof text !== 'string') return null;
   if (!text.includes('=')) return null;
@@ -179,6 +240,11 @@ export function tryParseFormEncoded(text) {
   return params.length ? { raw: text, params } : null;
 }
 
+/**
+ * Safely decode URI components without throwing.
+ * @param {string} value
+ * @returns {string}
+ */
 export function safeDecode(value) {
   if (value === undefined || value === null) return '';
   try {
@@ -188,11 +254,21 @@ export function safeDecode(value) {
   }
 }
 
+/**
+ * Replace plus signs with spaces.
+ * @param {string} value
+ * @returns {string}
+ */
 export function decodePlus(value) {
   if (value === undefined || value === null) return '';
   return value.replace(/\+/g, ' ');
 }
 
+/**
+ * Pretty-print JSON with syntax highlighting.
+ * @param {string} text
+ * @returns {string}
+ */
 export function highlightJson(text) {
   try {
     const obj = JSON.parse(text);
@@ -203,6 +279,11 @@ export function highlightJson(text) {
   }
 }
 
+/**
+ * Apply token-based syntax highlighting to JSON string.
+ * @param {string} json
+ * @returns {string}
+ */
 export function syntaxHighlight(json) {
   const escaped = escapeHtml(json);
   return escaped.replace(/("(\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*"(?=\s*:))|("(\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*")|\b(true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+\-]?\d+)?/g, match => {

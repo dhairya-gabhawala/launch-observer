@@ -1,3 +1,8 @@
+/**
+ * Format a timestamp for display.
+ * @param {number} ts
+ * @returns {string}
+ */
 export function formatTime(ts) {
   try {
     return new Date(ts).toLocaleTimeString();
@@ -6,11 +11,21 @@ export function formatTime(ts) {
   }
 }
 
+/**
+ * Format a duration in milliseconds.
+ * @param {number} ms
+ * @returns {string}
+ */
 export function formatDuration(ms) {
   if (typeof ms !== 'number') return '—';
   return `${Math.round(ms)} ms`;
 }
 
+/**
+ * Escape HTML entities.
+ * @param {string} value
+ * @returns {string}
+ */
 export function escapeHtml(value) {
   return String(value)
     .replace(/&/g, '&amp;')
@@ -20,10 +35,21 @@ export function escapeHtml(value) {
     .replace(/'/g, '&#039;');
 }
 
+/**
+ * Escape RegExp special characters.
+ * @param {string} value
+ * @returns {string}
+ */
 export function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/**
+ * Highlight a term in text with <mark>.
+ * @param {string} text
+ * @param {string} term
+ * @returns {string}
+ */
 export function highlightText(text, term) {
   if (!term) return escapeHtml(text);
   const safeTerm = escapeRegExp(term);
@@ -41,6 +67,11 @@ export function highlightText(text, term) {
   return result;
 }
 
+/**
+ * Create a stable numeric hash for a string.
+ * @param {string} value
+ * @returns {number}
+ */
 export function hashString(value) {
   let hash = 0;
   for (let i = 0; i < value.length; i += 1) {
@@ -50,12 +81,22 @@ export function hashString(value) {
   return Math.abs(hash);
 }
 
+/**
+ * Convert a string to title case.
+ * @param {string} value
+ * @returns {string}
+ */
 export function toTitleCase(value) {
   if (!value) return '';
   const spaced = value.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ');
   return spaced.replace(/\b\w/g, c => c.toUpperCase());
 }
 
+/**
+ * Safely set HTML content by parsing into DOM nodes.
+ * @param {Element} target
+ * @param {string} html
+ */
 export function setHTML(target, html) {
   if (!target) return;
   const parser = new DOMParser();

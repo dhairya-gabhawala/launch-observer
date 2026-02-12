@@ -3,6 +3,9 @@ import { escapeHtml, formatTime, setHTML } from './utils.js';
 import { applySearch } from './requests.js';
 import { toast } from './ui.js';
 
+/**
+ * Render the sessions list in the sidebar.
+ */
 export function renderSessions() {
   const list = elements.sessionList;
   if (!list) return;
@@ -74,7 +77,7 @@ export function renderSessions() {
       const id = button.getAttribute('data-rename-id');
       const session = state.sessions.find(s => s.id === id);
       if (!session) return;
-      state.sessionMode = 'rename';
+      state.sessionMode = 'update';
       state.sessionEditId = id;
       openSessionDialog(session);
     });
@@ -103,6 +106,10 @@ export function renderSessions() {
   });
 }
 
+/**
+ * Select an existing session.
+ * @param {string} id
+ */
 export function selectSession(id) {
   if (!id) return;
   api.runtime.sendMessage({ type: 'selectSession', id }, () => {
@@ -117,6 +124,10 @@ export function selectSession(id) {
   });
 }
 
+/**
+ * Delete a session and its requests.
+ * @param {string} id
+ */
 export function deleteSession(id) {
   api.runtime.sendMessage({ type: 'deleteSession', id }, () => {
     state.sessions = state.sessions.filter(s => s.id !== id);
@@ -137,6 +148,9 @@ export function deleteSession(id) {
   });
 }
 
+/**
+ * Populate site dropdown options.
+ */
 export function buildSiteOptions() {
   const select = elements.sessionSiteSelect;
   if (!select) return;
@@ -145,49 +159,70 @@ export function buildSiteOptions() {
   setHTML(select, options || '<option value="">Select a site</option>');
 }
 
+/**
+ * Populate lock-tab selector options.
+ */
 export function populateTabOptions() {
   if (!elements.sessionLockTab) return;
   api.tabs.query({}, tabs => {
     const filtered = tabs.filter(tab => !isExtensionTab(tab));
     state.tabsCache = filtered;
-    const options = [
-      { id: 'all', label: 'All tabs' },
-      ...filtered.map(tab => ({
-        id: String(tab.id),
-        label: `${tab.title || tab.url || 'Untitled'}`
-      }))
-    ];
+    const options = filtered.map(tab => ({
+      id: String(tab.id),
+      label: `${tab.title || tab.url || 'Untitled'}`
+    }));
     setHTML(elements.sessionLockTab, options.map(opt => {
       return `<option value="${opt.id}">${escapeHtml(opt.label)}</option>`;
     }).join(''));
   });
 }
 
+/**
+ * Resolve selected lock-tab ID.
+ * @returns {number|null}
+ */
 export function getSelectedTabId() {
   const value = elements.sessionLockTab?.value;
-  if (!value || value === 'all') return null;
+  if (!value) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+/**
+ * Check whether a tab is the extension UI.
+ * @param {object} tab
+ * @returns {boolean}
+ */
 export function isExtensionTab(tab) {
   const url = tab.url || '';
   return url.startsWith('chrome-extension://') || url.startsWith('moz-extension://');
 }
 
+/**
+ * Resolve selected site from dialog inputs.
+ * @returns {string}
+ */
 export function getSelectedSite() {
   const useNew = !elements.sessionSiteInput.classList.contains('hidden') && elements.sessionSiteInput.value.trim();
   const site = useNew ? elements.sessionSiteInput.value.trim() : (elements.sessionSiteSelect.value || '').trim();
   return site;
 }
 
+/**
+ * Open the session modal for create/rename.
+ * @param {object} session
+ */
 export function openSessionDialog(session) {
   buildSiteOptions();
   populateTabOptions();
   elements.sessionSiteInput.classList.add('hidden');
   elements.sessionSiteError.classList.add('hidden');
+  if (elements.sessionTabError) elements.sessionTabError.classList.add('hidden');
   elements.sessionNameInput.value = session?.name || '';
-  elements.sessionDialogTitle.textContent = state.sessionMode === 'rename' ? 'Rename Session' : 'Start Session';
+  elements.sessionDialogTitle.textContent = state.sessionMode === 'update' ? 'Update Session' : 'Start Session';
+  if (elements.sessionSave) {
+    elements.sessionSave.textContent = state.sessionMode === 'update' ? 'Update' : 'Start';
+  }
 
   if (session?.site) {
     const options = Array.from(elements.sessionSiteSelect.options).map(opt => opt.value);
@@ -200,8 +235,8 @@ export function openSessionDialog(session) {
   }
   if (session?.lockTabId !== null && session?.lockTabId !== undefined) {
     elements.sessionLockTab.value = String(session.lockTabId);
-  } else {
-    elements.sessionLockTab.value = 'all';
+  } else if (elements.sessionLockTab.options.length) {
+    elements.sessionLockTab.selectedIndex = 0;
   }
   if (elements.sessionUatToggle) {
     elements.sessionUatToggle.checked = !!session?.uatEnabled;
@@ -210,6 +245,9 @@ export function openSessionDialog(session) {
   elements.sessionDialog.showModal();
 }
 
+/**
+ * Update the session summary line.
+ */
 export function updateSessionSummary() {
   if (!elements.sessionSummary) return;
   const session = state.sessions.find(s => s.id === state.settings?.selectedSessionId);
@@ -225,6 +263,11 @@ export function updateSessionSummary() {
   elements.sessionSummary.textContent = `${session.site} · ${session.name || 'Untitled'} · ${tabLabel}`;
 }
 
+/**
+ * Get label for the locked tab selection.
+ * @param {number|null} lockTabId
+ * @returns {string}
+ */
 export function getTabLabel(lockTabId) {
   if (lockTabId === null || lockTabId === undefined) return 'All tabs';
   const tab = state.tabsCache.find(t => t.id === lockTabId);
@@ -232,6 +275,9 @@ export function getTabLabel(lockTabId) {
   return `Tab ${lockTabId}`;
 }
 
+/**
+ * Update UAT toggle availability and helper text.
+ */
 export function updateUatToggle() {
   if (!elements.sessionUatToggle || !elements.sessionUatNote) return;
   const site = getSelectedSite();

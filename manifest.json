@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Launch Observer",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Observe and inspect analytics network calls with decoded payloads.",
   "action": {
     "default_title": "Launch Observer"
@@ -14,7 +14,9 @@
     {
       "matches": ["<all_urls>"],
       "js": ["content/content.js"],
-      "run_at": "document_start"
+      "run_at": "document_start",
+      "all_frames": true,
+      "match_about_blank": true
     }
   ],
   "web_accessible_resources": [
@@ -25,6 +27,7 @@
   ],
   "permissions": [
     "storage",
+    "scripting",
     "tabs",
     "webRequest",
     "webNavigation"

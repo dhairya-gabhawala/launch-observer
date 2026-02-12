@@ -1,6 +1,10 @@
 import { elements, state } from './state.js';
 import { escapeHtml, setHTML } from './utils.js';
 
+/**
+ * Toggle the sidebar open/closed.
+ * @param {boolean} open
+ */
 export function toggleSidebar(open) {
   if (!elements.sidebar) return;
   if (open) {
@@ -12,6 +16,10 @@ export function toggleSidebar(open) {
   }
 }
 
+/**
+ * Activate a detail tab and update UI state.
+ * @param {string} tabId
+ */
 export function setActiveTab(tabId) {
   state.activeTab = tabId;
   if (elements.tabsSelect) elements.tabsSelect.value = tabId;
@@ -37,6 +45,11 @@ export function setActiveTab(tabId) {
   });
 }
 
+/**
+ * Show a toast notification.
+ * @param {string} message
+ * @param {string} [detail='']
+ */
 export function toast(message, detail = '') {
   const stack = document.getElementById('toast-stack');
   if (!stack) return;

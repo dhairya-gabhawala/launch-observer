@@ -1,148 +1,14 @@
 import { elements, state } from './state.js';
-import { escapeHtml, hashString, setHTML } from './utils.js';
-
-export const SERVICE_CATALOG = [
-  {
-    id: 'adobe-edge',
-    name: 'Adobe Edge',
-    category: 'analytics',
-    domains: ['edge.adobedc.net'],
-    brandColor: '#FF0000',
-    default: true
-  },
-  {
-    id: 'adobe-analytics',
-    name: 'Adobe Analytics',
-    category: 'analytics',
-    domains: ['omtrdc.net', '2o7.net'],
-    brandColor: '#FF0000',
-    default: false
-  },
-  {
-    id: 'google-analytics',
-    name: 'Google Analytics',
-    category: 'analytics',
-    domains: ['google-analytics.com', 'analytics.google.com'],
-    brandColor: '#F9AB00',
-    default: false
-  },
-  {
-    id: 'google-ads',
-    name: 'Google Ads',
-    category: 'advertising',
-    domains: ['googleadservices.com', 'doubleclick.net'],
-    brandColor: '#4285F4',
-    default: false
-  },
-  {
-    id: 'meta',
-    name: 'Meta Pixel',
-    category: 'advertising',
-    domains: ['facebook.com', 'facebook.net'],
-    brandColor: '#0668E1',
-    default: false
-  },
-  {
-    id: 'tiktok',
-    name: 'TikTok Pixel',
-    category: 'advertising',
-    domains: ['tiktok.com', 'tiktokv.com', 'analytics.tiktok.com'],
-    brandColor: '#000000',
-    default: false
-  },
-  {
-    id: 'linkedin',
-    name: 'LinkedIn Insight',
-    category: 'advertising',
-    domains: ['linkedin.com', 'licdn.com'],
-    brandColor: '#0A66C2',
-    default: false
-  },
-  {
-    id: 'pinterest',
-    name: 'Pinterest Tag',
-    category: 'advertising',
-    domains: ['pinterest.com', 'pinimg.com'],
-    brandColor: '#E60023',
-    default: false
-  },
-  {
-    id: 'snapchat',
-    name: 'Snapchat Pixel',
-    category: 'advertising',
-    domains: ['snapchat.com', 'sc-static.net', 'tr.snapchat.com'],
-    brandColor: '#FFFC00',
-    default: false
-  },
-  {
-    id: 'x',
-    name: 'X Ads',
-    category: 'advertising',
-    domains: ['twitter.com', 't.co', 'ads-twitter.com'],
-    brandColor: '#111111',
-    default: false
-  },
-  {
-    id: 'microsoft-ads',
-    name: 'Microsoft Ads (Bing)',
-    category: 'advertising',
-    domains: ['bat.bing.com', 'bing.com'],
-    brandColor: '#008373',
-    default: false
-  },
-  {
-    id: 'baidu',
-    name: 'Baidu Tongji',
-    category: 'analytics',
-    domains: ['baidu.com', 'hm.baidu.com'],
-    brandColor: '#2932E1',
-    default: false
-  },
-  {
-    id: 'demandbase',
-    name: 'Demandbase',
-    category: 'advertising',
-    domains: ['demandbase.com', 'tag.demandbase.com'],
-    brandColor: '#1F325D',
-    default: false
-  },
-  {
-    id: 'hotjar',
-    name: 'Hotjar',
-    category: 'analytics',
-    domains: ['hotjar.com', 'hotjar.io'],
-    brandColor: '#FF3C00',
-    default: false
-  },
-  {
-    id: 'segment',
-    name: 'Segment',
-    category: 'cdp',
-    domains: ['segment.com', 'segment.io'],
-    brandColor: '#52BD95',
-    default: false
-  },
-  {
-    id: 'mixpanel',
-    name: 'Mixpanel',
-    category: 'analytics',
-    domains: ['mixpanel.com'],
-    brandColor: '#7F4BFF',
-    default: false
-  },
-  {
-    id: 'amplitude',
-    name: 'Amplitude',
-    category: 'analytics',
-    domains: ['amplitude.com'],
-    brandColor: '#005AF0',
-    default: false
-  }
-];
+import { escapeHtml, setHTML } from './utils.js';
+import { SERVICE_CATALOG, domainMatches, getMappingForDomain, resolveServiceForDomain } from '../../lib/services.js';
 
 export const DEFAULT_SERVICE_IDS = SERVICE_CATALOG.filter(service => service.default).map(service => service.id);
 export const DEFAULT_ALLOWLIST = buildAllowlistFromServices(DEFAULT_SERVICE_IDS);
 
+/**
+ * Render the popular services list UI.
+ * @param {Array<string>} allowlist
+ */
 export function renderAllowlistServices(allowlist) {
   if (!elements.allowlistServices) return;
   const selected = new Set(getSelectedServiceIds(allowlist));
@@ -218,6 +84,11 @@ export function renderAllowlistServices(allowlist) {
   `);
 }
 
+/**
+ * Render custom allowlist domain rows.
+ * @param {Array<string>} entries
+ * @param {Array<object>} mappings
+ */
 export function renderAllowlistFields(entries, mappings) {
   const list = elements.allowlistFields;
   list.replaceChildren();
@@ -231,6 +102,12 @@ export function renderAllowlistFields(entries, mappings) {
   });
 }
 
+/**
+ * Create a single allowlist row element.
+ * @param {string} [value='']
+ * @param {object|null} [mapping=null]
+ * @returns {HTMLDivElement}
+ */
 export function createAllowlistRow(value = '', mapping = null) {
   const row = document.createElement('div');
   row.className = 'flex flex-col gap-2';
@@ -274,12 +151,22 @@ export function createAllowlistRow(value = '', mapping = null) {
   return row;
 }
 
+/**
+ * Get service IDs matching the allowlist.
+ * @param {Array<string>} allowlist
+ * @returns {Array<string>}
+ */
 export function getSelectedServiceIds(allowlist) {
   const list = Array.isArray(allowlist) ? allowlist : [];
   return SERVICE_CATALOG.filter(service => service.domains.some(domain => allowlistHasDomain(list, domain)))
     .map(service => service.id);
 }
 
+/**
+ * Get custom domain entries not covered by selected services.
+ * @param {Array<string>} allowlist
+ * @returns {Array<string>}
+ */
 export function getCustomAllowlistEntries(allowlist) {
   const list = Array.isArray(allowlist) ? allowlist : [];
   const selectedServiceIds = getSelectedServiceIds(list);
@@ -287,6 +174,11 @@ export function getCustomAllowlistEntries(allowlist) {
   return list.filter(domain => !isDomainCovered(domain, serviceDomains));
 }
 
+/**
+ * Build a domain allowlist from selected service IDs.
+ * @param {Array<string>} serviceIds
+ * @returns {Array<string>}
+ */
 export function buildAllowlistFromServices(serviceIds) {
   const domains = [];
   serviceIds.forEach(id => {
@@ -296,6 +188,11 @@ export function buildAllowlistFromServices(serviceIds) {
   return dedupeDomains(domains);
 }
 
+/**
+ * Deduplicate domain list (case-insensitive).
+ * @param {Array<string>} domains
+ * @returns {Array<string>}
+ */
 export function dedupeDomains(domains) {
   const seen = new Set();
   return domains
@@ -309,29 +206,43 @@ export function dedupeDomains(domains) {
     });
 }
 
+/**
+ * Determine if allowlist covers a domain.
+ * @param {Array<string>} allowlist
+ * @param {string} domain
+ * @returns {boolean}
+ */
 export function allowlistHasDomain(allowlist, domain) {
   return allowlist.some(entry => domainMatches(entry, domain));
 }
 
-export function domainMatches(entry, domain) {
-  const left = (entry || '').toLowerCase();
-  const right = (domain || '').toLowerCase();
-  if (!left || !right) return false;
-  if (left === right) return true;
-  if (left.endsWith(`.${right}`)) return true;
-  if (right.endsWith(`.${left}`)) return true;
-  return false;
-}
-
+/**
+ * Compare domain entries with subdomain support.
+ * @param {string} entry
+ * @param {string} domain
+ * @returns {boolean}
+ */
+/**
+ * Check if a domain is covered by service domains.
+ * @param {string} domain
+ * @param {Array<string>} serviceDomains
+ * @returns {boolean}
+ */
 export function isDomainCovered(domain, serviceDomains) {
   return serviceDomains.some(serviceDomain => domainMatches(domain, serviceDomain));
 }
 
-export function getMappingForDomain(domain, mappings) {
-  const list = Array.isArray(mappings) ? mappings : [];
-  return list.find(item => domainMatches(item.domain, domain)) || null;
-}
-
+/**
+ * Find the custom mapping for a domain.
+ * @param {string} domain
+ * @param {Array<object>} mappings
+ * @returns {object|null}
+ */
+/**
+ * Render service icon/badge for a request.
+ * @param {object} req
+ * @returns {string}
+ */
 export function renderServiceIcon(req) {
   const service = getServiceForDomain(req.domain);
   if (service) return renderServiceBadge(service);
@@ -339,26 +250,20 @@ export function renderServiceIcon(req) {
   return renderCategoryBadge(category);
 }
 
+/**
+ * Resolve a service catalog entry for a domain.
+ * @param {string} domain
+ * @returns {object|null}
+ */
 export function getServiceForDomain(domain) {
-  if (!domain) return null;
-  const mapping = getMappingForDomain(domain, state.settings?.serviceMappings || []);
-  if (mapping) {
-    if (mapping.serviceId) {
-      const mapped = SERVICE_CATALOG.find(service => service.id === mapping.serviceId);
-      if (mapped) return mapped;
-    }
-    if (mapping.customName) {
-      return {
-        id: `custom-${hashString(mapping.customName)}`,
-        name: mapping.customName,
-        category: 'other',
-        brandColor: '#0F172A'
-      };
-    }
-  }
-  return SERVICE_CATALOG.find(service => service.domains.some(serviceDomain => domainMatches(domain, serviceDomain))) || null;
+  return resolveServiceForDomain(domain, state.settings?.serviceMappings || []);
 }
 
+/**
+ * Categorize requests without a known service.
+ * @param {object} req
+ * @returns {string}
+ */
 export function getCategoryFallback(req) {
   const domain = (req.domain || '').toLowerCase();
   const path = (req.path || '').toLowerCase();
@@ -368,6 +273,11 @@ export function getCategoryFallback(req) {
   return 'other';
 }
 
+/**
+ * Render a badge for a service.
+ * @param {object} service
+ * @returns {string}
+ */
 export function renderServiceBadge(service) {
   const label = service.name || service.id;
   if (service.brandColor) {
@@ -384,6 +294,12 @@ export function renderServiceBadge(service) {
   return renderCategoryBadge(service.category || 'other', label);
 }
 
+/**
+ * Render a badge for a generic category.
+ * @param {string} category
+ * @param {string} [label='']
+ * @returns {string}
+ */
 export function renderCategoryBadge(category, label = '') {
   const icon = CATEGORY_ICONS[category] || CATEGORY_ICONS.other;
   return `
@@ -393,6 +309,11 @@ export function renderCategoryBadge(category, label = '') {
   `;
 }
 
+/**
+ * Create initials from a service name.
+ * @param {string} label
+ * @returns {string}
+ */
 export function getServiceInitials(label) {
   if (!label) return 'SR';
   const words = label.replace(/[()]/g, '').split(/\s+/).filter(Boolean);
@@ -401,6 +322,11 @@ export function getServiceInitials(label) {
   return `${words[0][0]}${words[1][0]}`.toUpperCase();
 }
 
+/**
+ * Check if a color is near white.
+ * @param {string} hexColor
+ * @returns {boolean}
+ */
 export function isNearWhite(hexColor) {
   const hex = String(hexColor || '').replace('#', '');
   if (hex.length !== 6) return false;
@@ -410,6 +336,11 @@ export function isNearWhite(hexColor) {
   return r > 230 && g > 230 && b > 230;
 }
 
+/**
+ * Group services by first letter.
+ * @param {Array<object>} services
+ * @returns {Record<string, Array<object>>}
+ */
 export function groupServicesByInitial(services) {
   const grouped = {};
   services
