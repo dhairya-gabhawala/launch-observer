@@ -1,5 +1,10 @@
 const api = window.chrome || window.browser;
 
+/**
+ * Post allowlist settings to the page context.
+ * @param {Array<string>} allowlist
+ * @param {boolean} enableHooks
+ */
 function postAllowlist(allowlist, enableHooks) {
   window.postMessage({
     source: 'launch-observer',
@@ -9,6 +14,10 @@ function postAllowlist(allowlist, enableHooks) {
   }, '*');
 }
 
+/**
+ * Fetch settings from the background script.
+ * @returns {Promise<object|null>}
+ */
 async function getSettings() {
   return new Promise(resolve => {
     api.runtime.sendMessage({ type: 'getSettings' }, response => {
@@ -17,6 +26,9 @@ async function getSettings() {
   });
 }
 
+/**
+ * Inject the page hook script.
+ */
 function injectScript() {
   const script = document.createElement('script');
   script.src = api.runtime.getURL('content/inject.js');
@@ -32,7 +44,39 @@ window.addEventListener('message', event => {
       type: 'capturedPayload',
       requestId: event.data.requestId,
       url: event.data.url || '',
-      payload: event.data.payload
+      payload: event.data.payload,
+      hookId: event.data.hookId || '',
+      hookTs: event.data.hookTs || 0,
+      pageUrl: event.data.pageUrl || ''
+    });
+  }
+  if (event.data.type === 'hookReady') {
+    api.runtime.sendMessage({ type: 'hookReady' });
+  }
+  if (event.data.type === 'hookCall') {
+    api.runtime.sendMessage({
+      type: 'hookCall',
+      kind: event.data.kind || '',
+      url: event.data.url || ''
+    });
+  }
+  if (event.data.type === 'capturedWebsdk') {
+    api.runtime.sendMessage({
+      type: 'capturedWebsdk',
+      payload: event.data.payload,
+      hookId: event.data.hookId || '',
+      hookTs: event.data.hookTs || 0,
+      pageUrl: event.data.pageUrl || ''
+    });
+  }
+  if (event.data.type === 'pageContext') {
+    api.runtime.sendMessage({
+      type: 'pageContext',
+      requestId: event.data.requestId,
+      url: event.data.url || '',
+      hookId: event.data.hookId || '',
+      hookTs: event.data.hookTs || 0,
+      pageUrl: event.data.pageUrl || ''
     });
   }
   if (event.data.type === 'requestAllowlist') {

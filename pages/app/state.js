@@ -18,7 +18,8 @@ export const state = {
   sites: [],
   allowlistServiceSearch: '',
   requestCapNotified: {},
-  uatConfigs: {}
+  uatConfigs: {},
+  sessionStopReason: null
 };
 
 export const elements = {
@@ -28,6 +29,7 @@ export const elements = {
   mobileOverlay: document.getElementById('mobile-sidebar-overlay'),
   requestList: document.getElementById('request-list'),
   requestCount: document.getElementById('request-count'),
+  sessionExpiredBanner: document.getElementById('session-expired-banner'),
   search: document.getElementById('search'),
   sessionList: document.getElementById('session-list'),
   newSession: document.getElementById('new-session'),
@@ -49,6 +51,7 @@ export const elements = {
   sessionSiteInput: document.getElementById('session-site-input'),
   sessionSiteError: document.getElementById('session-site-error'),
   sessionLockTab: document.getElementById('session-lock-tab'),
+  sessionTabError: document.getElementById('session-tab-error'),
   sessionCancel: document.getElementById('session-cancel'),
   sessionSave: document.getElementById('session-save'),
   emptyState: document.getElementById('empty-state'),
@@ -74,6 +77,9 @@ export const elements = {
   confirmOk: document.getElementById('confirm-ok'),
   confirmTitle: document.getElementById('confirm-title'),
   confirmBody: document.getElementById('confirm-body'),
+  sessionIdleDialog: document.getElementById('session-idle-dialog'),
+  sessionIdleExtend: document.getElementById('session-idle-extend'),
+  sessionIdleStop: document.getElementById('session-idle-stop'),
   openHelp: document.getElementById('open-help'),
   helpDialog: document.getElementById('help-dialog'),
   helpClose: document.getElementById('help-close'),
@@ -115,5 +121,6 @@ export const elements = {
   uatExport: document.getElementById('uat-export'),
   uatReportClose: document.getElementById('uat-report-close'),
   sessionUatToggle: document.getElementById('session-uat-toggle'),
-  sessionUatNote: document.getElementById('session-uat-note')
+  sessionUatNote: document.getElementById('session-uat-note'),
+  debugModeBadge: document.getElementById('debug-mode-badge')
 };

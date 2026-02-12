@@ -24,13 +24,18 @@
               <div class="text-xs text-slate-500">Request Inspector</div>
             </div>
           </div>
-          <div class="flex items-center gap-2 text-xs text-slate-500">
-            <div>v0.1.2</div>
-            <button id="open-help" class="inline-flex items-center justify-center rounded hover:text-slate-700" aria-label="Help">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" class="h-4 w-4">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" />
-              </svg>
-            </button>
+          <div class="flex flex-col items-end gap-1 text-xs text-slate-500">
+            <div class="flex items-center gap-2">
+              <div>v0.1.3</div>
+              <button id="open-help" class="inline-flex items-center justify-center rounded hover:text-slate-700" aria-label="Help">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" class="h-4 w-4">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" />
+                </svg>
+              </button>
+            </div>
+            <div id="debug-mode-badge" class="hidden rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+              Debug: On
+            </div>
           </div>
           <button id="close-sidebar" class="lg:hidden text-slate-500 hover:text-slate-700" aria-label="Close sidebar">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" class="h-6 w-6">
@@ -94,6 +99,9 @@
           <div class="mt-2 text-xs text-slate-500 flex items-center gap-3">
             <span id="request-count">0 requests</span>
             <span id="session-summary" class="text-slate-500"></span>
+          </div>
+          <div id="session-expired-banner" class="mt-2 hidden rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-700">
+            Session expired due to inactivity.
           </div>
         </div>
         <div class="flex-1 overflow-hidden">
@@ -230,24 +238,25 @@
     <form method="dialog" class="p-6 space-y-4">
       <div class="text-lg font-semibold" id="session-dialog-title">Start Session</div>
       <div class="text-sm text-slate-600">Choose a site and name this session before capturing.</div>
-      <label class="text-sm">
-        <span class="block text-slate-700">Site (required)</span>
-        <div class="mt-1 flex items-center gap-2">
-          <select id="session-site-select" class="flex-1 border rounded px-3 py-2 text-sm"></select>
-          <button id="session-site-new" type="button" class="text-xs underline text-slate-700">New site</button>
-        </div>
-        <input id="session-site-input" class="mt-2 w-full border rounded px-3 py-2 text-sm hidden" placeholder="Enter new site name" />
-        <div id="session-site-error" class="mt-1 text-xs text-rose-700 hidden">Site is required.</div>
-      </label>
-      <label class="text-sm">
-        <span class="block text-slate-700">Session name</span>
-        <input id="session-name-input" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="e.g. Checkout flow" />
-      </label>
-      <label class="text-sm">
-        <span class="block text-slate-700">Lock listening to a tab</span>
-        <select id="session-lock-tab" class="mt-1 w-full border rounded px-3 py-2 text-sm"></select>
-        <div class="mt-1 text-xs text-slate-500">Choose “All tabs” to listen everywhere.</div>
-      </label>
+      <div class="space-y-4">
+        <label class="text-sm">
+          <span class="block text-slate-700">Site (required)</span>
+          <div class="mt-1 flex items-center gap-2">
+            <select id="session-site-select" class="flex-1 border rounded px-3 py-2 text-sm"></select>
+            <button id="session-site-new" type="button" class="text-xs underline text-slate-700">New site</button>
+          </div>
+          <input id="session-site-input" class="mt-2 w-full border rounded px-3 py-2 text-sm hidden" placeholder="Enter new site name" />
+          <div id="session-site-error" class="mt-1 text-xs text-rose-700 hidden">Site is required.</div>
+        </label>
+        <label class="text-sm">
+          <span class="block text-slate-700">Session name</span>
+          <input id="session-name-input" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="e.g. Checkout flow" />
+        </label>
+        <label class="text-sm">
+          <span class="block text-slate-700">Lock listening to a tab</span>
+          <select id="session-lock-tab" class="mt-1 w-full border rounded px-3 py-2 text-sm"></select>
+          <div id="session-tab-error" class="mt-1 text-xs text-rose-700 hidden">Tab selection is required.</div>
+        </label>
       <div class="flex items-start gap-3 text-sm text-slate-700">
         <div class="flex h-6 shrink-0 items-center">
           <div class="grid size-4 grid-cols-1">
@@ -261,6 +270,7 @@
           <label for="session-uat-toggle" class="font-medium">Perform UAT validations</label>
           <div id="session-uat-note" class="text-xs text-slate-500">Uses the UAT assertions configured for this site.</div>
         </div>
+      </div>
       </div>
       <div class="flex justify-end gap-2">
         <button id="session-cancel" class="px-3 py-2 border rounded" type="button">Cancel</button>
@@ -276,6 +286,17 @@
       <div class="flex justify-end gap-2">
         <button id="confirm-cancel" class="px-3 py-2 border rounded" type="button">Cancel</button>
         <button id="confirm-ok" class="px-3 py-2 bg-rose-600 text-white rounded" value="default">Clear</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="session-idle-dialog" class="rounded-lg p-0 w-[420px]">
+    <form method="dialog" class="p-6 space-y-4">
+      <div class="text-lg font-semibold">Session idle</div>
+      <div class="text-sm text-slate-600">No requests were captured in the last 5 minutes. Do you want to extend the session or stop it now?</div>
+      <div class="flex justify-end gap-2">
+        <button id="session-idle-extend" class="px-3 py-2 border rounded" type="button">Extend</button>
+        <button id="session-idle-stop" class="px-3 py-2 bg-slate-900 text-white rounded" type="button">Stop session</button>
       </div>
     </form>
   </dialog>
@@ -382,6 +403,20 @@
                   <div><span class="font-semibold">UAT assertions:</span> Rules that validate your analytics data.</div>
                 </div>
               </div>
+              <div class="mt-3 text-slate-600">
+                <div class="font-semibold text-slate-900 mb-2">WebSDK payload capture</div>
+                <div class="text-slate-600">
+                  When payload capture via page hooks is enabled, Launch Observer can capture WebSDK payloads
+                  even when requests are sent outside the page context.
+                </div>
+              </div>
+              <div class="mt-4 rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+                <div class="font-semibold text-slate-900">Privacy statement</div>
+                <div class="mt-1 text-slate-600">
+                  Launch Observer does not send data to external servers. It only inspects allowlisted requests
+                  while a session is active and stores data locally in your browser.
+                </div>
+              </div>
               <figure class="mt-4">
                 <a href="assets/help/overview.png" target="_blank" rel="noopener" class="block">
                   <img src="assets/help/overview.png" alt="Overview of Launch Observer UI" class="w-full rounded border bg-white" />
@@ -430,11 +465,12 @@
             </section>
             <section id="uat" class="help-panel hidden">
               <h3 class="help-section-title text-base font-semibold text-slate-900 mb-2">UAT Assertions</h3>
-              <div class="text-slate-600">UAT assertions are JSON rules that validate analytics calls for a site. Each assertion contains one or more conditions, plus optional page-level count rules.</div>
+              <div class="text-slate-600">UAT assertions are JSON rules that validate analytics calls for a site. Each assertion can include applicability conditions (when to run) and validations (what must pass).</div>
               <div class="mt-3 text-slate-600">
                 <div class="font-semibold text-slate-900 mb-2">Top-level structure</div>
                 <ul class="list-disc pl-5 space-y-1">
                   <li><span class="font-semibold">siteId</span> and <span class="font-semibold">siteName</span>: identify the site.</li>
+                  <li><span class="font-semibold">global</span>: optional include/exclude gates by service ID and conditions.</li>
                   <li><span class="font-semibold">assertions</span>: array of assertion objects.</li>
                 </ul>
               </div>
@@ -442,9 +478,10 @@
                 <div class="font-semibold text-slate-900 mb-2">Assertion fields</div>
                 <ul class="list-disc pl-5 space-y-1">
                   <li><span class="font-semibold">id</span>, <span class="font-semibold">title</span>, <span class="font-semibold">description</span></li>
-                  <li><span class="font-semibold">logic</span>: <span class="font-semibold">all</span> or <span class="font-semibold">any</span></li>
+                  <li><span class="font-semibold">conditionsLogic</span>: <span class="font-semibold">all</span> or <span class="font-semibold">any</span></li>
                   <li><span class="font-semibold">scope</span>: <span class="font-semibold">request</span> or <span class="font-semibold">page</span></li>
-                  <li><span class="font-semibold">conditions</span>: list of checks for payload, query, headers, or raw body</li>
+                  <li><span class="font-semibold">conditions</span>: optional applicability checks (when the assertion should run)</li>
+                  <li><span class="font-semibold">validations</span>: required checks that must pass when applicable</li>
                   <li><span class="font-semibold">count</span> + <span class="font-semibold">value</span>: page-level rules (exactly/at_least/at_most)</li>
                 </ul>
               </div>
@@ -462,19 +499,48 @@
                 <ul class="list-disc pl-5 space-y-1">
                   <li><span class="font-semibold">siteId</span> (required): string identifier for the site.</li>
                   <li><span class="font-semibold">siteName</span> (optional): human-friendly site label (string).</li>
+                  <li><span class="font-semibold">global</span> (optional): global gates for UAT applicability.</li>
+                  <li><span class="font-semibold">global.includeServices</span> (optional): service IDs to include.</li>
+                  <li><span class="font-semibold">global.excludeServices</span> (optional): service IDs to exclude.</li>
+                  <li><span class="font-semibold">global.includeConditions</span> (optional): conditions that must all pass to run UAT.</li>
+                  <li><span class="font-semibold">global.excludeConditions</span> (optional): conditions that skip UAT when matched.</li>
                   <li><span class="font-semibold">assertions</span> (required): array of assertion objects.</li>
                   <li><span class="font-semibold">assertion.id</span> (required): unique string.</li>
                   <li><span class="font-semibold">assertion.title</span> (optional): string shown in the UI.</li>
                   <li><span class="font-semibold">assertion.description</span> (optional): string shown in the UI.</li>
-                  <li><span class="font-semibold">assertion.logic</span> (optional): <span class="font-semibold">all</span> or <span class="font-semibold">any</span> (default: all).</li>
+                  <li><span class="font-semibold">assertion.conditionsLogic</span> (optional): <span class="font-semibold">all</span> or <span class="font-semibold">any</span> for applicability (default: all).</li>
                   <li><span class="font-semibold">assertion.scope</span> (optional): <span class="font-semibold">request</span> or <span class="font-semibold">page</span> (default: request).</li>
-                  <li><span class="font-semibold">assertion.conditions</span> (required): array of condition objects.</li>
+                  <li><span class="font-semibold">assertion.conditions</span> (optional): array of applicability condition objects.</li>
+                  <li><span class="font-semibold">assertion.validations</span> (required): array of validation objects (all must pass).</li>
+                  <li><span class="font-semibold">validations logic</span>: always <span class="font-semibold">all</span> (no override).</li>
                   <li><span class="font-semibold">assertion.count</span> (required only for scope=page): <span class="font-semibold">exactly</span>, <span class="font-semibold">at_least</span>, or <span class="font-semibold">at_most</span>.</li>
                   <li><span class="font-semibold">assertion.value</span> (required only for scope=page): number.</li>
                   <li><span class="font-semibold">condition.source</span> (optional): <span class="font-semibold">payload</span>, <span class="font-semibold">query</span>, <span class="font-semibold">headers</span>, or <span class="font-semibold">raw</span> (default: payload).</li>
                   <li><span class="font-semibold">condition.path</span> (required unless source=raw): string path.</li>
                   <li><span class="font-semibold">condition.operator</span> (required): string operator.</li>
                   <li><span class="font-semibold">condition.expected</span> (required for comparison operators): string, number, or array.</li>
+                </ul>
+              </div>
+              <div class="mt-4 text-slate-600">
+                <div class="font-semibold text-slate-900 mb-2">Service catalog (IDs)</div>
+                <ul class="list-disc pl-5 space-y-1">
+                  <li><span class="font-semibold">adobe-edge</span> — Adobe Edge</li>
+                  <li><span class="font-semibold">adobe-analytics</span> — Adobe Analytics</li>
+                  <li><span class="font-semibold">google-analytics</span> — Google Analytics</li>
+                  <li><span class="font-semibold">google-ads</span> — Google Ads</li>
+                  <li><span class="font-semibold">meta</span> — Meta Pixel</li>
+                  <li><span class="font-semibold">tiktok</span> — TikTok Pixel</li>
+                  <li><span class="font-semibold">linkedin</span> — LinkedIn Insight</li>
+                  <li><span class="font-semibold">pinterest</span> — Pinterest Tag</li>
+                  <li><span class="font-semibold">snapchat</span> — Snapchat Pixel</li>
+                  <li><span class="font-semibold">x</span> — X Ads</li>
+                  <li><span class="font-semibold">microsoft-ads</span> — Microsoft Ads (Bing)</li>
+                  <li><span class="font-semibold">baidu</span> — Baidu Tongji</li>
+                  <li><span class="font-semibold">demandbase</span> — Demandbase</li>
+                  <li><span class="font-semibold">hotjar</span> — Hotjar</li>
+                  <li><span class="font-semibold">segment</span> — Segment</li>
+                  <li><span class="font-semibold">mixpanel</span> — Mixpanel</li>
+                  <li><span class="font-semibold">amplitude</span> — Amplitude</li>
                 </ul>
               </div>
               <div class="mt-3 rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
@@ -484,13 +550,33 @@
                 <pre><code>{
   "siteId": "example-site",
   "siteName": "Example Site",
+  "global": {
+    "includeServices": ["adobe-analytics", "adobe-edge"],
+    "excludeServices": ["meta"],
+    "excludeConditions": [
+      {
+        "source": "payload",
+        "path": "events[0].xdm.eventType",
+        "operator": "equals",
+        "expected": "web.webinteraction.linkClicks"
+      }
+    ]
+  },
   "assertions": [
     {
       "id": "pageview-once",
       "title": "Pageview fires only once",
       "description": "Ensure pageview event fires only once per page view.",
-      "logic": "all",
+      "conditionsLogic": "all",
       "conditions": [
+        {
+          "source": "payload",
+          "path": "events[0].web.webPageDetails.siteSection",
+          "operator": "equals",
+          "expected": "Homepage"
+        }
+      ],
+      "validations": [
         {
           "source": "payload",
           "path": "events[0].xdm.eventType",
@@ -505,8 +591,9 @@
     {
       "id": "page-name-present",
       "title": "Page name is present",
-      "logic": "all",
-      "conditions": [
+      "conditionsLogic": "all",
+      "conditions": [],
+      "validations": [
         {
           "source": "payload",
           "path": "events[0]._experience.analytics.customDimensions.eVars.eVar41",

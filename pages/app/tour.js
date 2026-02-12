@@ -65,6 +65,9 @@ let backBtn;
 let skipBtn;
 let finishBtn;
 
+/**
+ * Initialize the onboarding tour.
+ */
 export function initTour() {
   overlay = document.getElementById('tour-overlay');
   spotlight = document.getElementById('tour-spotlight');
@@ -99,6 +102,10 @@ export function initTour() {
   });
 }
 
+/**
+ * Start the tour.
+ * @param {boolean} manual
+ */
 export function startTour(manual) {
   if (!overlay) return;
   overlay.classList.remove('hidden');
@@ -106,6 +113,10 @@ export function startTour(manual) {
   goTo(activeIndex);
 }
 
+/**
+ * Navigate to a specific tour step.
+ * @param {number} index
+ */
 function goTo(index) {
   if (index < 0) return;
   if (index >= steps.length) {
@@ -116,6 +127,9 @@ function goTo(index) {
   renderStep();
 }
 
+/**
+ * Render the current tour step UI.
+ */
 function renderStep() {
   const step = steps[activeIndex];
   const target = document.querySelector(step.target);
@@ -140,6 +154,9 @@ function renderStep() {
   positionForTarget(target);
 }
 
+/**
+ * Reposition spotlight and card for current step.
+ */
 function positionCurrent() {
   if (!overlay || overlay.classList.contains('hidden')) return;
   const step = steps[activeIndex];
@@ -148,6 +165,10 @@ function positionCurrent() {
   positionForTarget(target);
 }
 
+/**
+ * Position spotlight and card relative to a target element.
+ * @param {Element} target
+ */
 function positionForTarget(target) {
   const rect = target.getBoundingClientRect();
   const padding = 8;
@@ -189,6 +210,10 @@ function positionForTarget(target) {
   card.style.transform = 'translateX(0)';
 }
 
+/**
+ * End the tour and optionally persist completion.
+ * @param {boolean} persist
+ */
 function endTour(persist) {
   overlay.classList.add('hidden');
   if (persist) {
