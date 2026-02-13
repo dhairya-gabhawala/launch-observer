@@ -11,7 +11,10 @@ export const DEFAULT_ALLOWLIST = buildAllowlistFromServices(DEFAULT_SERVICE_IDS)
  */
 export function renderAllowlistServices(allowlist) {
   if (!elements.allowlistServices) return;
-  const selected = new Set(getSelectedServiceIds(allowlist));
+  const selectedIds = Array.isArray(state.allowlistSelectedServiceIds) && state.allowlistSelectedServiceIds.length
+    ? state.allowlistSelectedServiceIds
+    : getSelectedServiceIds(allowlist);
+  const selected = new Set(selectedIds);
   const term = (state.allowlistServiceSearch || '').trim().toLowerCase();
   const filtered = term
     ? SERVICE_CATALOG.filter(service => {
@@ -82,6 +85,20 @@ export function renderAllowlistServices(allowlist) {
       `).join('')}
     </nav>
   `);
+
+  const currentSelection = new Set(selectedIds);
+  elements.allowlistServices.querySelectorAll('input[data-service-id]').forEach(input => {
+    input.addEventListener('change', () => {
+      const id = input.getAttribute('data-service-id');
+      if (!id) return;
+      if (input.checked) {
+        currentSelection.add(id);
+      } else {
+        currentSelection.delete(id);
+      }
+      state.allowlistSelectedServiceIds = Array.from(currentSelection);
+    });
+  });
 }
 
 /**

@@ -32,6 +32,7 @@ let sites = [];
 let currentSessionId = null;
 let navState = new Map();
 let tabUrlCache = new Map();
+const lastInjectByTab = new Map();
 const payloadCacheByUrlTab = new Map();
 let uatConfigs = {};
 const hookQueueByTabUrl = new Map();
@@ -88,11 +89,15 @@ async function injectPageHooks(tabId, url = '', reason = '') {
   }
   if (!isHttpUrl(targetUrl)) return;
   try {
+    const last = lastInjectByTab.get(tabId) || {};
+    const now = Date.now();
+    if (last.url === targetUrl && now - (last.ts || 0) < 1000) return;
     await api.scripting.executeScript({
       target: { tabId, allFrames: true },
       files: ['content/inject.js'],
       world: 'MAIN'
     });
+    lastInjectByTab.set(tabId, { url: targetUrl, ts: now });
     debugHookLog('inject: main world', { tabId, url: targetUrl, reason });
   } catch (error) {
     debugHookLog('inject: failed', { tabId, url: targetUrl, reason, error: String(error) });
@@ -779,6 +784,11 @@ api.webNavigation.onCommitted.addListener(details => {
   injectPageHooks(details.tabId, details.url, 'nav-committed');
 });
 
+api.webNavigation.onBeforeNavigate.addListener(details => {
+  if (details.frameId !== 0) return;
+  injectPageHooks(details.tabId, details.url, 'nav-before');
+});
+
 api.webNavigation.onCompleted.addListener(details => {
   if (details.frameId !== 0) return;
   const existing = navState.get(details.tabId) || { navId: 0 };
@@ -807,6 +817,10 @@ api.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.url) {
     tabUrlCache.set(tabId, changeInfo.url);
   }
+  if (changeInfo.status === 'loading') {
+    const targetUrl = changeInfo.url || tab?.url || '';
+    if (targetUrl) injectPageHooks(tabId, targetUrl, 'tab-loading');
+  }
   if (changeInfo.status === 'complete' && tab?.url) {
     tabUrlCache.set(tabId, tab.url);
   }
@@ -815,6 +829,7 @@ api.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 api.tabs.onRemoved.addListener(tabId => {
   tabUrlCache.delete(tabId);
   navState.delete(tabId);
+  lastInjectByTab.delete(tabId);
   Array.from(hookQueueByTabUrl.keys()).forEach(key => {
     if (key.startsWith(`${tabId}::`)) hookQueueByTabUrl.delete(key);
   });

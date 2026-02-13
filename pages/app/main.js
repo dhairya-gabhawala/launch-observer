@@ -1,5 +1,5 @@
 import { api, elements, state } from './state.js';
-import { DEFAULT_ALLOWLIST, buildAllowlistFromServices, createAllowlistRow, dedupeDomains, getCustomAllowlistEntries, renderAllowlistFields, renderAllowlistServices } from './allowlist.js';
+import { DEFAULT_ALLOWLIST, buildAllowlistFromServices, createAllowlistRow, dedupeDomains, getCustomAllowlistEntries, getSelectedServiceIds, renderAllowlistFields, renderAllowlistServices } from './allowlist.js';
 import { applySearch, selectRequest } from './requests.js';
 import { deleteSession, getSelectedSite, getSelectedTabId, openSessionDialog, renderSessions, selectSession, updateSessionSummary, updateUatToggle } from './sessions.js';
 import { setActiveTab, toggleSidebar, toast } from './ui.js';
@@ -66,6 +66,7 @@ if (elements.search) {
 if (elements.manageAllowlist) {
   elements.manageAllowlist.addEventListener('click', () => {
     const allowlist = Array.isArray(state.settings?.allowlist) ? state.settings.allowlist : DEFAULT_ALLOWLIST;
+    state.allowlistSelectedServiceIds = getSelectedServiceIds(allowlist);
     renderAllowlistServices(allowlist);
     renderAllowlistFields(getCustomAllowlistEntries(allowlist), state.settings?.serviceMappings || []);
     if (elements.enableHooks) {
@@ -464,6 +465,7 @@ if (elements.uatAssertionsSite) {
 
 if (elements.allowlistCancel) {
   elements.allowlistCancel.addEventListener('click', () => {
+    state.allowlistSelectedServiceIds = null;
     elements.allowlistDialog.close();
   });
 }
@@ -487,9 +489,11 @@ if (elements.allowlistSave) {
         return null;
       })
       .filter(Boolean);
-    const selectedServiceIds = Array.from(elements.allowlistServices?.querySelectorAll('input[data-service-id]:checked') || [])
-      .map(input => input.getAttribute('data-service-id'))
-      .filter(Boolean);
+    const selectedServiceIds = Array.isArray(state.allowlistSelectedServiceIds) && state.allowlistSelectedServiceIds.length
+      ? state.allowlistSelectedServiceIds
+      : Array.from(elements.allowlistServices?.querySelectorAll('input[data-service-id]:checked') || [])
+        .map(input => input.getAttribute('data-service-id'))
+        .filter(Boolean);
     const serviceDomains = buildAllowlistFromServices(selectedServiceIds);
     const merged = dedupeDomains([...serviceDomains, ...entries]);
     updateSettings({
@@ -498,6 +502,7 @@ if (elements.allowlistSave) {
       debugHooks: !!state.settings?.debugHooks,
       serviceMappings: mappings
     });
+    state.allowlistSelectedServiceIds = null;
     elements.allowlistDialog.close();
     toast('Allowlist updated');
   });

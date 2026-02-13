@@ -77,6 +77,10 @@ Background and content scripts:
   - `LaunchObserverDebug.isHookLoggingEnabled()`
 - Sessions will prompt to end after 5 minutes of inactivity (no captured requests).
 
+## Recent Updates
+- Stabilized WebSDK payload capture by re-wrapping network hooks if page scripts overwrite them.
+- Added a resilient `window.alloy` hook to ensure WebSDK `sendEvent` payloads are captured reliably.
+
 ## UAT Assertions
 - Import one JSON file per site via the **UAT Assertions** dialog.
 - Enable **Perform UAT validations** when starting a session.
@@ -130,24 +134,3 @@ Background and content scripts:
 ## Documentation Site
 The GitHub Pages site lives in `docs/` with the landing page at `docs/index.html`
 and the privacy policy at `docs/privacy.html`.
-
-## Publishing
-This repo includes a GitHub Actions workflow to build and publish a release package.
-You must add the required secrets to your GitHub repository before publishing.
-
-### Secrets (Chrome)
-- `CHROME_EXTENSION_ID`
-- `CHROME_CLIENT_ID`
-- `CHROME_CLIENT_SECRET`
-- `CHROME_REFRESH_TOKEN`
-
-### Secrets (Firefox)
-- `FIREFOX_API_KEY`
-- `FIREFOX_API_SECRET`
-
-### Secrets (Edge)
-Edge publishing requires Microsoft Partner Center API credentials.
-Add your chosen secrets and update the Edge step in the workflow accordingly.
-
-### Release
-Push a tag like `v0.1.1` or run the workflow manually from GitHub Actions.

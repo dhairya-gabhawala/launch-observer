@@ -11,6 +11,7 @@
   const MAX_PENDING = 50;
   let hookReadySent = false;
   let alloyWrapped = false;
+  let alloySetterInstalled = false;
 
   /**
    * Check URL against the allowlist.
@@ -193,6 +194,31 @@
     alloyWrapped = true;
   }
 
+  function installAlloySetter() {
+    if (alloySetterInstalled) return;
+    let current = window.alloy;
+    try {
+      Object.defineProperty(window, 'alloy', {
+        configurable: true,
+        get() {
+          return current;
+        },
+        set(value) {
+          current = value;
+          alloyWrapped = false;
+          wrapAlloy();
+        }
+      });
+      alloySetterInstalled = true;
+      if (current) {
+        alloyWrapped = false;
+        wrapAlloy();
+      }
+    } catch {
+      alloySetterInstalled = true;
+    }
+  }
+
   /**
    * Convert request body into text when possible.
    * @param {any} body
@@ -248,57 +274,72 @@
     }
   }
 
-  const originalFetch = window.fetch;
-  window.fetch = function(input, init = {}) {
-    try {
-      const request = input instanceof Request ? input : null;
-      const url = request ? request.url : String(input);
-      postHookCall('fetch', url);
-      const initHeaders = init && init.headers ? init.headers : null;
-      const headerLookup = headerObj => {
-        if (!headerObj) return '';
-        if (headerObj instanceof Headers) return headerObj.get('content-type') || '';
-        if (Array.isArray(headerObj)) {
-          const found = headerObj.find(([k]) => String(k).toLowerCase() === 'content-type');
-          return found ? found[1] : '';
-        }
-        return headerObj['Content-Type'] || headerObj['content-type'] || '';
-      };
-      const contentType = headerLookup(initHeaders) || (request ? request.headers.get('content-type') : '');
-      let body = (init && init.body !== undefined) ? init.body : null;
-      if (body instanceof ReadableStream && typeof body.tee === 'function') {
-        const [streamA, streamB] = body.tee();
-        body = streamA;
-        init.body = streamB;
-      }
-      if (body) {
-        bodyToText(body).then(text => {
-          if (text) {
-            postPayload(url, text, contentType);
-          } else {
-            postPageContext(url);
+  let wrappedFetch = null;
+  let wrappedBeacon = null;
+  let wrappedXhr = null;
+
+  function wrapFetch() {
+    const current = window.fetch;
+    if (typeof current !== 'function') return;
+    if (current.__launchObserverWrapped) return;
+    const originalFetch = current;
+    const wrapped = function(input, init = {}) {
+      try {
+        const request = input instanceof Request ? input : null;
+        const url = request ? request.url : String(input);
+        postHookCall('fetch', url);
+        const initHeaders = init && init.headers ? init.headers : null;
+        const headerLookup = headerObj => {
+          if (!headerObj) return '';
+          if (headerObj instanceof Headers) return headerObj.get('content-type') || '';
+          if (Array.isArray(headerObj)) {
+            const found = headerObj.find(([k]) => String(k).toLowerCase() === 'content-type');
+            return found ? found[1] : '';
           }
-        });
-      } else if (request) {
-        try {
-          request.clone().text().then(text => {
+          return headerObj['Content-Type'] || headerObj['content-type'] || '';
+        };
+        const contentType = headerLookup(initHeaders) || (request ? request.headers.get('content-type') : '');
+        let body = (init && init.body !== undefined) ? init.body : null;
+        if (body instanceof ReadableStream && typeof body.tee === 'function') {
+          const [streamA, streamB] = body.tee();
+          body = streamA;
+          init.body = streamB;
+        }
+        if (body) {
+          bodyToText(body).then(text => {
             if (text) {
               postPayload(url, text, contentType);
             } else {
               postPageContext(url);
             }
           });
-        } catch {}
-      } else {
-        postPageContext(url);
-      }
-    } catch {}
-    return originalFetch.apply(this, arguments);
-  };
+        } else if (request) {
+          try {
+            request.clone().text().then(text => {
+              if (text) {
+                postPayload(url, text, contentType);
+              } else {
+                postPageContext(url);
+              }
+            });
+          } catch {}
+        } else {
+          postPageContext(url);
+        }
+      } catch {}
+      return originalFetch.apply(this, arguments);
+    };
+    wrapped.__launchObserverWrapped = true;
+    wrapped.__launchObserverOriginal = originalFetch;
+    window.fetch = wrapped;
+    wrappedFetch = wrapped;
+  }
 
-  const originalSendBeacon = navigator.sendBeacon?.bind(navigator);
-  if (originalSendBeacon) {
-    navigator.sendBeacon = function(url, data) {
+  function wrapBeacon() {
+    const current = navigator.sendBeacon?.bind(navigator);
+    if (!current || current.__launchObserverWrapped) return;
+    const originalSendBeacon = current;
+    const wrapped = function(url, data) {
       try {
         postHookCall('beacon', url);
         bodyToText(data).then(text => {
@@ -311,41 +352,70 @@
       } catch {}
       return originalSendBeacon(url, data);
     };
+    wrapped.__launchObserverWrapped = true;
+    wrapped.__launchObserverOriginal = originalSendBeacon;
+    try {
+      navigator.sendBeacon = wrapped;
+      wrappedBeacon = wrapped;
+    } catch {}
   }
 
-  const originalOpen = XMLHttpRequest.prototype.open;
-  const originalSend = XMLHttpRequest.prototype.send;
-  const originalSetHeader = XMLHttpRequest.prototype.setRequestHeader;
-  XMLHttpRequest.prototype.open = function(method, url) {
-    this.__lo_url = url;
-    this.__lo_headers = {};
-    return originalOpen.apply(this, arguments);
-  };
-  XMLHttpRequest.prototype.setRequestHeader = function(name, value) {
-    try {
-      this.__lo_headers[name.toLowerCase()] = value;
-    } catch {}
-    return originalSetHeader.apply(this, arguments);
-  };
-  XMLHttpRequest.prototype.send = function(body) {
-    try {
-      if (this.__lo_url && body) {
-        postHookCall('xhr', this.__lo_url);
-        bodyToText(body).then(text => {
-          const contentType = this.__lo_headers?.['content-type'] || '';
-          if (text) {
-            postPayload(this.__lo_url, text, contentType);
-          } else {
-            postPageContext(this.__lo_url);
-          }
-        });
-      } else if (this.__lo_url) {
-        postHookCall('xhr', this.__lo_url);
-        postPageContext(this.__lo_url);
-      }
-    } catch {}
-    return originalSend.apply(this, arguments);
-  };
+  function wrapXhr() {
+    const proto = XMLHttpRequest.prototype;
+    if (proto.send && proto.send.__launchObserverWrapped) return;
+    const originalOpen = proto.open;
+    const originalSend = proto.send;
+    const originalSetHeader = proto.setRequestHeader;
+    proto.open = function(method, url) {
+      this.__lo_url = url;
+      this.__lo_headers = {};
+      return originalOpen.apply(this, arguments);
+    };
+    proto.setRequestHeader = function(name, value) {
+      try {
+        this.__lo_headers[name.toLowerCase()] = value;
+      } catch {}
+      return originalSetHeader.apply(this, arguments);
+    };
+    const wrappedSend = function(body) {
+      try {
+        if (this.__lo_url && body) {
+          postHookCall('xhr', this.__lo_url);
+          bodyToText(body).then(text => {
+            const contentType = this.__lo_headers?.['content-type'] || '';
+            if (text) {
+              postPayload(this.__lo_url, text, contentType);
+            } else {
+              postPageContext(this.__lo_url);
+            }
+          });
+        } else if (this.__lo_url) {
+          postHookCall('xhr', this.__lo_url);
+          postPageContext(this.__lo_url);
+        }
+      } catch {}
+      return originalSend.apply(this, arguments);
+    };
+    wrappedSend.__launchObserverWrapped = true;
+    wrappedSend.__launchObserverOriginal = originalSend;
+    proto.send = wrappedSend;
+    wrappedXhr = wrappedSend;
+  }
+
+  wrapFetch();
+  wrapBeacon();
+  wrapXhr();
+  installAlloySetter();
+
+  // Wrapping handled by wrapFetch / wrapBeacon / wrapXhr with watchdog.
+
+  const watchdog = setInterval(() => {
+    wrapFetch();
+    wrapBeacon();
+    wrapXhr();
+    wrapAlloy();
+    installAlloySetter();
+  }, 1500);
 
   window.addEventListener('message', event => {
     if (!event.data || event.data.source !== 'launch-observer' || event.data.type !== 'allowlist') return;

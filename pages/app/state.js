@@ -17,6 +17,7 @@ export const state = {
   tabsCache: [],
   sites: [],
   allowlistServiceSearch: '',
+  allowlistSelectedServiceIds: null,
   requestCapNotified: {},
   uatConfigs: {},
   sessionStopReason: null
